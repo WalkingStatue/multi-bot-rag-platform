@@ -1,22 +1,40 @@
+"""
+Main FastAPI application entry point.
+"""
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+
+from app.core.config import settings
+from app.api import auth, users
 
 app = FastAPI(
-    title="Multi-Bot RAG Platform API",
-    description="Backend API for the Multi-Bot RAG Platform",
-    version="1.0.0"
+    title="Multi-Bot RAG Platform",
+    description="A comprehensive multi-bot assistant platform with RAG capabilities",
+    version="1.0.0",
+    debug=settings.debug
 )
 
-@app.get("/health")
-async def health_check():
-    """Health check endpoint for Docker health checks"""
-    return JSONResponse(content={"status": "healthy"})
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.frontend_url],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Include routers
+app.include_router(auth.router, prefix="/api")
+app.include_router(users.router, prefix="/api")
+
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Root endpoint."""
     return {"message": "Multi-Bot RAG Platform API"}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy"}
