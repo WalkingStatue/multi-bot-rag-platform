@@ -60,3 +60,96 @@ def client(db_session):
         yield test_client
     
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(scope="function")
+def test_user(db_session):
+    """Create a test user."""
+    from app.models.user import User
+    from app.core.security import get_password_hash
+    
+    user = User(
+        username="testuser",
+        email="test@example.com",
+        password_hash=get_password_hash("testpassword"),
+        full_name="Test User",
+        is_active=True
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture(scope="function")
+def sample_user(db_session):
+    """Create a sample user for testing."""
+    from app.models.user import User
+    from app.core.security import get_password_hash
+    
+    user = User(
+        username="sampleuser",
+        email="sample@example.com",
+        password_hash=get_password_hash("samplepassword"),
+        full_name="Sample User",
+        is_active=True
+    )
+    db_session.add(user)
+    db_session.commit()
+    db_session.refresh(user)
+    return user
+
+
+@pytest.fixture(scope="function")
+def sample_bot(db_session, sample_user):
+    """Create a sample bot for testing."""
+    from app.models.bot import Bot
+    
+    bot = Bot(
+        name="Sample Bot",
+        description="A sample bot for testing",
+        system_prompt="You are a helpful assistant",
+        owner_id=sample_user.id,
+        llm_provider="openai",
+        llm_model="gpt-3.5-turbo",
+        temperature=0.7,
+        max_tokens=1000
+    )
+    db_session.add(bot)
+    db_session.commit()
+    db_session.refresh(bot)
+    return bot
+
+
+@pytest.fixture(scope="function")
+def auth_headers(client, test_user):
+    """Create authentication headers for test requests."""
+    # Login to get token
+    login_data = {
+        "username": "testuser",
+        "password": "testpassword"
+    }
+    response = client.post("/api/auth/login", json=login_data)
+    assert response.status_code == 200
+    
+    token_data = response.json()
+    access_token = token_data["access_token"]
+    
+    return {"Authorization": f"Bearer {access_token}"}
+
+
+@pytest.fixture(scope="function")
+def sample_auth_headers(client, sample_user):
+    """Create authentication headers for sample user test requests."""
+    # Login to get token
+    login_data = {
+        "username": "sampleuser",
+        "password": "samplepassword"
+    }
+    response = client.post("/api/auth/login", json=login_data)
+    assert response.status_code == 200
+    
+    token_data = response.json()
+    access_token = token_data["access_token"]
+    
+    return {"Authorization": f"Bearer {access_token}"}

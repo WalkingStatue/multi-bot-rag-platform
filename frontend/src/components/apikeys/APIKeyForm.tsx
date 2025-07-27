@@ -1,0 +1,212 @@
+/**
+ * API Key form component for adding/editing API keys
+ */
+import React, { useState } from 'react';
+import { APIKeyCreate, ProviderInfo } from '../../types/api';
+
+interface APIKeyFormProps {
+  onSubmit: (data: APIKeyCreate) => Promise<void>;
+  onCancel: () => void;
+  providers: Record<string, ProviderInfo>;
+  initialProvider?: string;
+  isLoading?: boolean;
+}
+
+export const APIKeyForm: React.FC<APIKeyFormProps> = ({
+  onSubmit,
+  onCancel,
+  providers,
+  initialProvider,
+  isLoading = false,
+}) => {
+  const [formData, setFormData] = useState<APIKeyCreate>({
+    provider: initialProvider || '',
+    api_key: '',
+  });
+  const [validationStatus, setValidationStatus] = useState<{
+    isValidating: boolean;
+    isValid: boolean | null;
+    message: string;
+  }>({
+    isValidating: false,
+    isValid: null,
+    message: '',
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.provider || !formData.api_key.trim()) {
+      return;
+    }
+    await onSubmit(formData);
+  };
+
+  const handleProviderChange = (provider: string) => {
+    setFormData({ ...formData, provider });
+    setValidationStatus({ isValidating: false, isValid: null, message: '' });
+  };
+
+  const handleAPIKeyChange = (apiKey: string) => {
+    setFormData({ ...formData, api_key: apiKey });
+    setValidationStatus({ isValidating: false, isValid: null, message: '' });
+  };
+
+  const validateAPIKey = async () => {
+    if (!formData.provider || !formData.api_key.trim()) {
+      return;
+    }
+
+    setValidationStatus({ isValidating: true, isValid: null, message: '' });
+
+    try {
+      const { apiKeyService } = await import('../../services/apiKeyService');
+      const result = await apiKeyService.validateAPIKey(formData.provider, formData.api_key);
+      
+      setValidationStatus({
+        isValidating: false,
+        isValid: result.valid,
+        message: result.message,
+      });
+    } catch (error) {
+      setValidationStatus({
+        isValidating: false,
+        isValid: false,
+        message: 'Failed to validate API key',
+      });
+    }
+  };
+
+  const getProviderDisplayName = (provider: string) => {
+    const names: Record<string, string> = {
+      openai: 'OpenAI',
+      anthropic: 'Anthropic',
+      openrouter: 'OpenRouter',
+      gemini: 'Google Gemini',
+    };
+    return names[provider] || provider;
+  };
+
+  const getAPIKeyPlaceholder = (provider: string) => {
+    const placeholders: Record<string, string> = {
+      openai: 'sk-...',
+      anthropic: 'sk-ant-...',
+      openrouter: 'sk-or-...',
+      gemini: 'AIza...',
+    };
+    return placeholders[provider] || 'Enter your API key';
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-md p-6">
+      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        {initialProvider ? 'Update API Key' : 'Add API Key'}
+      </h3>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Provider Selection */}
+        <div>
+          <label htmlFor="provider" className="block text-sm font-medium text-gray-700 mb-1">
+            Provider
+          </label>
+          <select
+            id="provider"
+            value={formData.provider}
+            onChange={(e) => handleProviderChange(e.target.value)}
+            disabled={!!initialProvider}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+            required
+          >
+            <option value="">Select a provider</option>
+            {Object.entries(providers).map(([key]) => (
+              <option key={key} value={key}>
+                {getProviderDisplayName(key)}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* API Key Input */}
+        <div>
+          <label htmlFor="api_key" className="block text-sm font-medium text-gray-700 mb-1">
+            API Key
+          </label>
+          <div className="relative">
+            <input
+              type="password"
+              id="api_key"
+              value={formData.api_key}
+              onChange={(e) => handleAPIKeyChange(e.target.value)}
+              placeholder={getAPIKeyPlaceholder(formData.provider)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            />
+            {formData.provider && formData.api_key && (
+              <button
+                type="button"
+                onClick={validateAPIKey}
+                disabled={validationStatus.isValidating}
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+              >
+                {validationStatus.isValidating ? 'Validating...' : 'Validate'}
+              </button>
+            )}
+          </div>
+
+          {/* Validation Status */}
+          {validationStatus.message && (
+            <div
+              className={`mt-2 text-sm ${
+                validationStatus.isValid
+                  ? 'text-green-600'
+                  : validationStatus.isValid === false
+                  ? 'text-red-600'
+                  : 'text-gray-600'
+              }`}
+            >
+              {validationStatus.message}
+            </div>
+          )}
+        </div>
+
+        {/* Available Models */}
+        {formData.provider && providers[formData.provider] && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Available Models
+            </label>
+            <div className="bg-gray-50 rounded-md p-3">
+              <div className="flex flex-wrap gap-2">
+                {providers[formData.provider].models.map((model) => (
+                  <span
+                    key={model}
+                    className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded"
+                  >
+                    {model}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Form Actions */}
+        <div className="flex justify-end space-x-3 pt-4">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isLoading || !formData.provider || !formData.api_key.trim()}
+            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Saving...' : initialProvider ? 'Update' : 'Add'} API Key
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};

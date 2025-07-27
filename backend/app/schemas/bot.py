@@ -93,3 +93,8 @@ class BotPermissionResponse(BotPermissionBase):
     granted_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class BotTransferRequest(BaseModel):
+    """Schema for bot ownership transfer request."""
+    new_owner_id: uuid.UUID

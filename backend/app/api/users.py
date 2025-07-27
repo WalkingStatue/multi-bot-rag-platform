@@ -13,6 +13,7 @@ from ..schemas.user import (
 )
 from ..services.user_service import UserService
 from ..services.auth_service import AuthService
+from ..services.llm_service import LLMProviderService
 from ..models.user import User
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -187,3 +188,70 @@ async def delete_api_key(
     """
     user_service.delete_api_key(current_user, provider)
     return None
+
+
+@router.post("/api-keys/{provider}/validate", status_code=status.HTTP_200_OK)
+async def validate_api_key(
+    provider: str,
+    api_key_data: APIKeyCreate,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Validate API key for a specific provider.
+    
+    Args:
+        provider: Provider name (openai, anthropic, openrouter, gemini)
+        api_key_data: API key data to validate
+        current_user: Current authenticated user
+        
+    Returns:
+        Validation result
+    """
+    if provider != api_key_data.provider:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provider in URL must match provider in request body"
+        )
+    
+    llm_service = LLMProviderService()
+    try:
+        is_valid = await llm_service.validate_api_key(provider, api_key_data.api_key)
+        return {
+            "valid": is_valid,
+            "provider": provider,
+            "message": "API key is valid" if is_valid else "API key is invalid"
+        }
+    finally:
+        await llm_service.close()
+
+
+@router.get("/api-keys/providers", status_code=status.HTTP_200_OK)
+async def get_supported_providers(
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get list of supported LLM providers.
+    
+    Args:
+        current_user: Current authenticated user
+        
+    Returns:
+        List of supported providers with their available models
+    """
+    llm_service = LLMProviderService()
+    try:
+        providers = llm_service.get_supported_providers()
+        provider_info = {}
+        
+        for provider in providers:
+            provider_info[provider] = {
+                "name": provider,
+                "models": llm_service.get_available_models(provider)
+            }
+        
+        return {
+            "providers": provider_info,
+            "total": len(providers)
+        }
+    finally:
+        await llm_service.close()
