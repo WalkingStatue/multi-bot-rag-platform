@@ -385,3 +385,287 @@ class TestUsersAPI:
         assert response.status_code == 404
         data = response.json()
         assert "API key not found" in data["detail"]
+    
+    # User Settings Tests
+    
+    @patch('app.api.users.get_current_active_user')
+    @patch('app.api.users.get_user_service')
+    def test_get_user_settings_success(self, mock_get_service, mock_get_user):
+        """Test successful user settings retrieval."""
+        # Arrange
+        mock_get_user.return_value = self.mock_user
+        mock_service = Mock()
+        mock_get_service.return_value = mock_service
+        
+        settings_response = {
+            "id": "settings1",
+            "user_id": "123e4567-e89b-12d3-a456-426614174000",
+            "theme": "dark",
+            "language": "en",
+            "timezone": "UTC",
+            "notifications_enabled": True,
+            "email_notifications": True,
+            "default_llm_provider": "openai",
+            "default_embedding_provider": "openai",
+            "max_conversation_history": 50,
+            "auto_save_conversations": True,
+            "created_at": "2023-01-01T00:00:00",
+            "updated_at": "2023-01-01T00:00:00"
+        }
+        mock_service.get_user_settings.return_value = settings_response
+        
+        # Act
+        response = self.client.get(
+            "/api/users/settings",
+            headers={"Authorization": "Bearer valid_token"}
+        )
+        
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert data["theme"] == "dark"
+        assert data["default_llm_provider"] == "openai"
+        mock_service.get_user_settings.assert_called_once_with(self.mock_user)
+    
+    @patch('app.api.users.get_current_active_user')
+    @patch('app.api.users.get_user_service')
+    def test_update_user_settings_success(self, mock_get_service, mock_get_user):
+        """Test successful user settings update."""
+        # Arrange
+        mock_get_user.return_value = self.mock_user
+        mock_service = Mock()
+        mock_get_service.return_value = mock_service
+        
+        updated_settings = {
+            "id": "settings1",
+            "user_id": "123e4567-e89b-12d3-a456-426614174000",
+            "theme": "dark",
+            "language": "es",
+            "timezone": "America/New_York",
+            "notifications_enabled": False,
+            "email_notifications": True,
+            "default_llm_provider": "anthropic",
+            "default_embedding_provider": "gemini",
+            "max_conversation_history": 100,
+            "auto_save_conversations": False,
+            "created_at": "2023-01-01T00:00:00",
+            "updated_at": "2023-01-01T00:00:00"
+        }
+        mock_service.update_user_settings.return_value = updated_settings
+        
+        settings_update = {
+            "theme": "dark",
+            "language": "es",
+            "timezone": "America/New_York",
+            "notifications_enabled": False,
+            "default_llm_provider": "anthropic",
+            "default_embedding_provider": "gemini",
+            "max_conversation_history": 100,
+            "auto_save_conversations": False
+        }
+        
+        # Act
+        response = self.client.put(
+            "/api/users/settings",
+            json=settings_update,
+            headers={"Authorization": "Bearer valid_token"}
+        )
+        
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert data["theme"] == "dark"
+        assert data["language"] == "es"
+        assert data["default_llm_provider"] == "anthropic"
+        assert data["max_conversation_history"] == 100
+        mock_service.update_user_settings.assert_called_once()
+    
+    @patch('app.api.users.get_current_active_user')
+    def test_update_user_settings_invalid_theme(self, mock_get_user):
+        """Test user settings update with invalid theme."""
+        # Arrange
+        mock_get_user.return_value = self.mock_user
+        
+        settings_update = {
+            "theme": "invalid_theme"
+        }
+        
+        # Act
+        response = self.client.put(
+            "/api/users/settings",
+            json=settings_update,
+            headers={"Authorization": "Bearer valid_token"}
+        )
+        
+        # Assert
+        assert response.status_code == 422
+    
+    @patch('app.api.users.get_current_active_user')
+    def test_update_user_settings_invalid_provider(self, mock_get_user):
+        """Test user settings update with invalid provider."""
+        # Arrange
+        mock_get_user.return_value = self.mock_user
+        
+        settings_update = {
+            "default_llm_provider": "invalid_provider"
+        }
+        
+        # Act
+        response = self.client.put(
+            "/api/users/settings",
+            json=settings_update,
+            headers={"Authorization": "Bearer valid_token"}
+        )
+        
+        # Assert
+        assert response.status_code == 422
+    
+    # User Analytics Tests
+    
+    @patch('app.api.users.get_current_active_user')
+    @patch('app.api.users.get_user_service')
+    def test_get_user_analytics_success(self, mock_get_service, mock_get_user):
+        """Test successful user analytics retrieval."""
+        # Arrange
+        mock_get_user.return_value = self.mock_user
+        mock_service = Mock()
+        mock_get_service.return_value = mock_service
+        
+        analytics_response = {
+            "activity_summary": {
+                "total_bots": 3,
+                "total_conversations": 15,
+                "total_messages": 150,
+                "total_documents_uploaded": 5,
+                "most_used_bot": "Assistant Bot",
+                "most_used_provider": "openai",
+                "activity_last_30_days": 45,
+                "created_at": "2023-01-01T00:00:00"
+            },
+            "bot_usage": [
+                {
+                    "bot_id": "bot1",
+                    "bot_name": "Assistant Bot",
+                    "message_count": 100,
+                    "conversation_count": 10,
+                    "document_count": 3,
+                    "last_used": "2023-01-15T00:00:00",
+                    "avg_response_time": 1.5
+                }
+            ],
+            "conversation_analytics": {
+                "total_conversations": 15,
+                "total_messages": 150,
+                "avg_messages_per_conversation": 10.0,
+                "most_active_bot": "Assistant Bot",
+                "conversations_by_day": [{"date": "2023-01-15", "count": 2}],
+                "messages_by_day": [{"date": "2023-01-15", "count": 20}]
+            },
+            "provider_usage": {
+                "openai": 100,
+                "anthropic": 50
+            },
+            "recent_activity": [
+                {
+                    "action": "message_sent",
+                    "details": {"bot_name": "Assistant Bot"},
+                    "created_at": "2023-01-15T00:00:00",
+                    "bot_id": "bot1"
+                }
+            ]
+        }
+        mock_service.get_user_analytics.return_value = analytics_response
+        
+        # Act
+        response = self.client.get(
+            "/api/users/analytics",
+            headers={"Authorization": "Bearer valid_token"}
+        )
+        
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert data["activity_summary"]["total_bots"] == 3
+        assert data["activity_summary"]["total_conversations"] == 15
+        assert data["activity_summary"]["most_used_bot"] == "Assistant Bot"
+        assert len(data["bot_usage"]) == 1
+        assert data["bot_usage"][0]["bot_name"] == "Assistant Bot"
+        assert data["conversation_analytics"]["total_conversations"] == 15
+        assert "openai" in data["provider_usage"]
+        assert len(data["recent_activity"]) == 1
+        mock_service.get_user_analytics.assert_called_once_with(self.mock_user)
+    
+    @patch('app.api.users.get_current_active_user')
+    @patch('app.api.users.get_user_service')
+    def test_get_user_activity_success(self, mock_get_service, mock_get_user):
+        """Test successful user activity summary retrieval."""
+        # Arrange
+        mock_get_user.return_value = self.mock_user
+        mock_service = Mock()
+        mock_get_service.return_value = mock_service
+        
+        activity_summary = {
+            "total_bots": 3,
+            "total_conversations": 15,
+            "total_messages": 150,
+            "total_documents_uploaded": 5,
+            "most_used_bot": "Assistant Bot",
+            "most_used_provider": "openai",
+            "activity_last_30_days": 45,
+            "created_at": "2023-01-01T00:00:00"
+        }
+        mock_service.get_user_activity_summary.return_value = activity_summary
+        
+        # Act
+        response = self.client.get(
+            "/api/users/activity?limit=25",
+            headers={"Authorization": "Bearer valid_token"}
+        )
+        
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert "activity_summary" in data
+        assert data["activity_summary"]["total_bots"] == 3
+        assert data["activity_summary"]["most_used_bot"] == "Assistant Bot"
+        assert "Retrieved activity summary" in data["message"]
+        mock_service.get_user_activity_summary.assert_called_once_with(self.mock_user)
+    
+    @patch('app.api.users.get_current_active_user')
+    def test_get_user_activity_invalid_limit(self, mock_get_user):
+        """Test user activity with invalid limit parameter."""
+        # Arrange
+        mock_get_user.return_value = self.mock_user
+        
+        # Act
+        response = self.client.get(
+            "/api/users/activity?limit=200",  # Exceeds maximum
+            headers={"Authorization": "Bearer valid_token"}
+        )
+        
+        # Assert
+        assert response.status_code == 422
+    
+    def test_get_user_settings_unauthorized(self):
+        """Test user settings retrieval without authentication."""
+        # Act
+        response = self.client.get("/api/users/settings")
+        
+        # Assert
+        assert response.status_code == 403
+    
+    def test_get_user_analytics_unauthorized(self):
+        """Test user analytics retrieval without authentication."""
+        # Act
+        response = self.client.get("/api/users/analytics")
+        
+        # Assert
+        assert response.status_code == 403
+    
+    def test_get_user_activity_unauthorized(self):
+        """Test user activity retrieval without authentication."""
+        # Act
+        response = self.client.get("/api/users/activity")
+        
+        # Assert
+        assert response.status_code == 403

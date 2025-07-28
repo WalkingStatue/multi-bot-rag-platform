@@ -135,11 +135,12 @@ class TestAuthAPI:
         mock_service = Mock()
         mock_get_service.return_value = mock_service
         
-        new_tokens = {
-            "access_token": "new_access_token",
-            "refresh_token": "new_refresh_token",
-            "token_type": "bearer"
-        }
+        from app.schemas.user import Token
+        new_tokens = Token(
+            access_token="new_access_token",
+            refresh_token="new_refresh_token",
+            token_type="bearer"
+        )
         mock_service.refresh_token.return_value = new_tokens
         
         refresh_data = {

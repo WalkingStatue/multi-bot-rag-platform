@@ -186,6 +186,16 @@ class PermissionService:
             
             self.db.commit()
             self.db.refresh(existing_permission)
+            
+            # Send WebSocket notification
+            self._send_permission_notification(
+                bot_id, user_id, "updated", {
+                    "old_role": old_role,
+                    "new_role": role,
+                    "granted_by": str(granted_by)
+                }
+            )
+            
             return existing_permission
         else:
             # Create new permission
@@ -212,6 +222,15 @@ class PermissionService:
             
             self.db.commit()
             self.db.refresh(permission)
+            
+            # Send WebSocket notification
+            self._send_permission_notification(
+                bot_id, user_id, "granted", {
+                    "role": role,
+                    "granted_by": str(granted_by)
+                }
+            )
+            
             return permission
     
     def revoke_permission(self, bot_id: uuid.UUID, user_id: uuid.UUID, revoked_by: uuid.UUID) -> bool:
@@ -272,6 +291,14 @@ class PermissionService:
         # Delete permission
         self.db.delete(permission)
         self.db.commit()
+        
+        # Send WebSocket notification
+        self._send_permission_notification(
+            bot_id, user_id, "revoked", {
+                "revoked_role": permission.role,
+                "revoked_by": str(revoked_by)
+            }
+        )
         
         return True
     
@@ -425,6 +452,22 @@ class PermissionService:
         
         return accessible_bots
     
+    def get_user_accessible_bot_ids(self, user_id: uuid.UUID) -> List[uuid.UUID]:
+        """
+        Get all bot IDs that a user has access to.
+        
+        Args:
+            user_id: User ID
+            
+        Returns:
+            List of accessible bot IDs
+        """
+        permissions = self.db.query(BotPermission.bot_id).filter(
+            BotPermission.user_id == user_id
+        ).all()
+        
+        return [permission.bot_id for permission in permissions]
+    
     def _log_activity(self, bot_id: uuid.UUID, user_id: uuid.UUID, action: str, details: Dict[str, Any]):
         """
         Log activity for audit trail.
@@ -444,3 +487,183 @@ class PermissionService:
         
         self.db.add(activity_log)
         # Note: commit is handled by the calling method
+    
+    def get_permission_history(self, bot_id: uuid.UUID, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+        """
+        Get permission change history for a bot.
+        
+        Args:
+            bot_id: Bot ID
+            limit: Maximum number of records to return
+            offset: Number of records to skip
+            
+        Returns:
+            List of permission history records
+        """
+        # Get permission-related activity logs
+        permission_activities = self.db.query(ActivityLog).filter(
+            and_(
+                ActivityLog.bot_id == bot_id,
+                ActivityLog.action.in_([
+                    'permission_granted', 'permission_updated', 'permission_revoked',
+                    'ownership_transferred'
+                ])
+            )
+        ).join(
+            User, ActivityLog.user_id == User.id, isouter=True
+        ).order_by(
+            ActivityLog.created_at.desc()
+        ).offset(offset).limit(limit).all()
+        
+        history = []
+        for activity in permission_activities:
+            # Extract information from activity details
+            details = activity.details or {}
+            
+            # Determine action type and roles
+            if activity.action == 'permission_granted':
+                action = 'granted'
+                old_role = None
+                new_role = details.get('role')
+            elif activity.action == 'permission_updated':
+                action = 'updated'
+                old_role = details.get('old_role')
+                new_role = details.get('new_role')
+            elif activity.action == 'permission_revoked':
+                action = 'revoked'
+                old_role = details.get('revoked_role')
+                new_role = None
+            elif activity.action == 'ownership_transferred':
+                action = 'ownership_transferred'
+                old_role = 'owner'
+                new_role = 'owner'
+            else:
+                continue
+            
+            # Get target user info
+            target_user_id = details.get('target_user_id')
+            target_username = details.get('target_username', 'Unknown')
+            
+            if target_user_id:
+                try:
+                    target_user_uuid = uuid.UUID(target_user_id)
+                except ValueError:
+                    continue
+                    
+                history.append({
+                    "id": activity.id,
+                    "bot_id": bot_id,
+                    "user_id": target_user_uuid,
+                    "username": target_username,
+                    "action": action,
+                    "old_role": old_role,
+                    "new_role": new_role,
+                    "granted_by": activity.user_id,
+                    "granted_by_username": activity.user.username if activity.user else None,
+                    "created_at": activity.created_at
+                })
+        
+        return history
+    
+    def get_bot_activity_logs(
+        self, 
+        bot_id: uuid.UUID, 
+        limit: int = 50, 
+        offset: int = 0, 
+        action_filter: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Get activity logs for a bot.
+        
+        Args:
+            bot_id: Bot ID
+            limit: Maximum number of records to return
+            offset: Number of records to skip
+            action_filter: Optional filter by action type
+            
+        Returns:
+            List of activity log records
+        """
+        query = self.db.query(ActivityLog).filter(
+            ActivityLog.bot_id == bot_id
+        ).join(
+            User, ActivityLog.user_id == User.id, isouter=True
+        )
+        
+        # Apply action filter if provided
+        if action_filter:
+            query = query.filter(ActivityLog.action == action_filter)
+        
+        activities = query.order_by(
+            ActivityLog.created_at.desc()
+        ).offset(offset).limit(limit).all()
+        
+        return [
+            {
+                "id": activity.id,
+                "bot_id": bot_id,
+                "user_id": activity.user_id,
+                "username": activity.user.username if activity.user else None,
+                "action": activity.action,
+                "details": activity.details,
+                "created_at": activity.created_at
+            }
+            for activity in activities
+        ]
+
+    def _send_permission_notification(
+        self, 
+        bot_id: uuid.UUID, 
+        target_user_id: uuid.UUID, 
+        action: str, 
+        details: Dict[str, Any]
+    ):
+        """
+        Send WebSocket notification for permission changes.
+        
+        Args:
+            bot_id: Bot ID
+            target_user_id: User ID whose permissions changed
+            action: Action performed (granted, revoked, updated)
+            details: Additional details about the change
+        """
+        try:
+            # Import here to avoid circular imports
+            import asyncio
+            from .websocket_service import connection_manager
+            
+            # Run async notification in background
+            asyncio.create_task(
+                connection_manager.send_notification(
+                    user_id=str(target_user_id),
+                    notification_type="permission_change",
+                    data={
+                        "bot_id": str(bot_id),
+                        "action": action,
+                        "details": details
+                    }
+                )
+            )
+            
+            # Also broadcast to all bot collaborators
+            asyncio.create_task(
+                connection_manager.broadcast_to_bot_collaborators(
+                    bot_id=str(bot_id),
+                    message={
+                        "type": "permission_change",
+                        "bot_id": str(bot_id),
+                        "data": {
+                            "target_user_id": str(target_user_id),
+                            "action": action,
+                            "details": details
+                        }
+                    },
+                    db=self.db
+                )
+            )
+            
+        except Exception as e:
+            # Don't raise exception - WebSocket failure shouldn't break permission changes
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to send permission WebSocket notification: {e}")

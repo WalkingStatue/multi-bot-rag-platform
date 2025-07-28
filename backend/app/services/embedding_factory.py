@@ -9,7 +9,6 @@ from fastapi import HTTPException, status
 from .providers.embedding_base import BaseEmbeddingProvider
 from .providers.openai_embedding_provider import OpenAIEmbeddingProvider
 from .providers.gemini_embedding_provider import GeminiEmbeddingProvider
-from .providers.local_embedding_provider import LocalEmbeddingProvider
 
 
 logger = logging.getLogger(__name__)
@@ -33,8 +32,7 @@ class EmbeddingClientFactory:
         """Initialize all supported embedding providers."""
         self._providers = {
             "openai": OpenAIEmbeddingProvider(self.client),
-            "gemini": GeminiEmbeddingProvider(self.client),
-            "local": LocalEmbeddingProvider()  # Local provider doesn't need HTTP client
+            "gemini": GeminiEmbeddingProvider(self.client)
         }
     
     def get_provider(self, provider_name: str) -> BaseEmbeddingProvider:
@@ -221,9 +219,3 @@ class EmbeddingClientFactory:
         """Close the HTTP client and clean up resources."""
         if self.client:
             await self.client.aclose()
-        
-        # Clean up local provider resources
-        if "local" in self._providers:
-            local_provider = self._providers["local"]
-            if hasattr(local_provider, 'cleanup'):
-                local_provider.cleanup()

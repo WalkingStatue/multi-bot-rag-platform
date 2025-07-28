@@ -114,3 +114,83 @@ class APIKeyResponse(APIKeyBase):
     # Note: We don't return the actual API key for security
 
     model_config = {"from_attributes": True}
+
+
+# User Settings and Preferences schemas
+class UserSettings(BaseModel):
+    """Schema for user settings and preferences."""
+    theme: Optional[str] = Field("light", pattern="^(light|dark|auto)$")
+    language: Optional[str] = Field("en", max_length=10)
+    timezone: Optional[str] = Field("UTC", max_length=50)
+    notifications_enabled: Optional[bool] = True
+    email_notifications: Optional[bool] = True
+    default_llm_provider: Optional[str] = Field(None, pattern="^(openai|anthropic|openrouter|gemini)$")
+    default_embedding_provider: Optional[str] = Field(None, pattern="^(openai|gemini|local)$")
+    max_conversation_history: Optional[int] = Field(50, ge=10, le=200)
+    auto_save_conversations: Optional[bool] = True
+
+
+class UserSettingsUpdate(BaseModel):
+    """Schema for user settings updates."""
+    theme: Optional[str] = Field(None, pattern="^(light|dark|auto)$")
+    language: Optional[str] = Field(None, max_length=10)
+    timezone: Optional[str] = Field(None, max_length=50)
+    notifications_enabled: Optional[bool] = None
+    email_notifications: Optional[bool] = None
+    default_llm_provider: Optional[str] = Field(None, pattern="^(openai|anthropic|openrouter|gemini)$")
+    default_embedding_provider: Optional[str] = Field(None, pattern="^(openai|gemini|local)$")
+    max_conversation_history: Optional[int] = Field(None, ge=10, le=200)
+    auto_save_conversations: Optional[bool] = None
+
+
+class UserSettingsResponse(UserSettings):
+    """Schema for user settings response."""
+    id: uuid.UUID
+    user_id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# User Activity and Analytics schemas
+class UserActivitySummary(BaseModel):
+    """Schema for user activity summary."""
+    total_bots: int
+    total_conversations: int
+    total_messages: int
+    total_documents_uploaded: int
+    most_used_bot: Optional[str] = None
+    most_used_provider: Optional[str] = None
+    activity_last_30_days: int
+    created_at: datetime
+
+
+class BotUsageStats(BaseModel):
+    """Schema for bot usage statistics."""
+    bot_id: uuid.UUID
+    bot_name: str
+    message_count: int
+    conversation_count: int
+    document_count: int
+    last_used: Optional[datetime] = None
+    avg_response_time: Optional[float] = None
+
+
+class ConversationAnalytics(BaseModel):
+    """Schema for conversation analytics."""
+    total_conversations: int
+    total_messages: int
+    avg_messages_per_conversation: float
+    most_active_bot: Optional[str] = None
+    conversations_by_day: List[dict]  # [{date: str, count: int}]
+    messages_by_day: List[dict]  # [{date: str, count: int}]
+
+
+class UserAnalytics(BaseModel):
+    """Schema for comprehensive user analytics."""
+    activity_summary: UserActivitySummary
+    bot_usage: List[BotUsageStats]
+    conversation_analytics: ConversationAnalytics
+    provider_usage: dict  # {provider: usage_count}
+    recent_activity: List[dict]  # Recent activity logs

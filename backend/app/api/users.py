@@ -9,7 +9,8 @@ from ..core.database import get_db
 from ..core.dependencies import get_current_active_user, get_user_service
 from ..schemas.user import (
     UserResponse, UserUpdate, UserSearch, PasswordChange,
-    APIKeyCreate, APIKeyUpdate, APIKeyResponse
+    APIKeyCreate, APIKeyUpdate, APIKeyResponse,
+    UserSettingsUpdate, UserSettingsResponse, UserAnalytics
 )
 from ..services.user_service import UserService
 from ..services.auth_service import AuthService
@@ -255,3 +256,88 @@ async def get_supported_providers(
         }
     finally:
         await llm_service.close()
+
+
+# User Settings Endpoints
+
+@router.get("/settings", response_model=UserSettingsResponse)
+async def get_user_settings(
+    current_user: User = Depends(get_current_active_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    Get current user settings and preferences.
+    
+    Args:
+        current_user: Current authenticated user
+        user_service: User service
+        
+    Returns:
+        User settings and preferences
+    """
+    return user_service.get_user_settings(current_user)
+
+
+@router.put("/settings", response_model=UserSettingsResponse)
+async def update_user_settings(
+    settings_update: UserSettingsUpdate,
+    current_user: User = Depends(get_current_active_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    Update user settings and preferences.
+    
+    Args:
+        settings_update: Settings updates
+        current_user: Current authenticated user
+        user_service: User service
+        
+    Returns:
+        Updated user settings
+    """
+    return user_service.update_user_settings(current_user, settings_update)
+
+
+# User Analytics Endpoints
+
+@router.get("/analytics", response_model=UserAnalytics)
+async def get_user_analytics(
+    current_user: User = Depends(get_current_active_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    Get comprehensive user analytics and activity data.
+    
+    Args:
+        current_user: Current authenticated user
+        user_service: User service
+        
+    Returns:
+        Comprehensive user analytics including activity summary,
+        bot usage statistics, conversation analytics, and recent activity
+    """
+    return user_service.get_user_analytics(current_user)
+
+
+@router.get("/activity", status_code=status.HTTP_200_OK)
+async def get_user_activity(
+    limit: int = Query(50, ge=1, le=100, description="Maximum number of activity records"),
+    current_user: User = Depends(get_current_active_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    Get user activity summary.
+    
+    Args:
+        limit: Maximum number of activity records to return
+        current_user: Current authenticated user
+        user_service: User service
+        
+    Returns:
+        User activity summary with recent actions
+    """
+    activity_summary = user_service.get_user_activity_summary(current_user)
+    return {
+        "activity_summary": activity_summary,
+        "message": f"Retrieved activity summary for user {current_user.username}"
+    }

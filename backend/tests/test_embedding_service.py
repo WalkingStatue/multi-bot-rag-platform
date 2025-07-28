@@ -11,7 +11,6 @@ from app.services.embedding_service import EmbeddingProviderService
 from app.services.embedding_factory import EmbeddingClientFactory
 from app.services.providers.openai_embedding_provider import OpenAIEmbeddingProvider
 from app.services.providers.gemini_embedding_provider import GeminiEmbeddingProvider
-from app.services.providers.local_embedding_provider import LocalEmbeddingProvider
 
 
 class TestEmbeddingProviderService:
@@ -52,11 +51,7 @@ class TestEmbeddingProviderService:
         
         assert result is False
     
-    @pytest.mark.asyncio
-    async def test_validate_api_key_local_provider(self, embedding_service):
-        """Test local provider API key validation (should always return True)."""
-        result = await embedding_service.validate_api_key("local", None)
-        assert result is True
+
     
     def test_get_supported_providers(self, embedding_service):
         """Test getting supported providers."""
@@ -65,7 +60,6 @@ class TestEmbeddingProviderService:
         assert isinstance(providers, list)
         assert "openai" in providers
         assert "gemini" in providers
-        assert "local" in providers
     
     def test_get_available_models_openai(self, embedding_service):
         """Test getting available models for OpenAI."""
@@ -76,13 +70,7 @@ class TestEmbeddingProviderService:
         assert "text-embedding-3-large" in models
         assert "text-embedding-ada-002" in models
     
-    def test_get_available_models_local(self, embedding_service):
-        """Test getting available models for local provider."""
-        models = embedding_service.get_available_models("local")
-        
-        assert isinstance(models, list)
-        assert "all-MiniLM-L6-v2" in models
-        assert "all-mpnet-base-v2" in models
+
     
     def test_get_embedding_dimension_openai(self, embedding_service):
         """Test getting embedding dimension for OpenAI models."""
@@ -92,23 +80,17 @@ class TestEmbeddingProviderService:
         dim = embedding_service.get_embedding_dimension("openai", "text-embedding-3-large")
         assert dim == 3072
     
-    def test_get_embedding_dimension_local(self, embedding_service):
-        """Test getting embedding dimension for local models."""
-        dim = embedding_service.get_embedding_dimension("local", "all-MiniLM-L6-v2")
-        assert dim == 384
-        
-        dim = embedding_service.get_embedding_dimension("local", "all-mpnet-base-v2")
-        assert dim == 768
+
     
     def test_validate_model_for_provider(self, embedding_service):
         """Test model validation for providers."""
         # Valid models
         assert embedding_service.validate_model_for_provider("openai", "text-embedding-3-small") is True
-        assert embedding_service.validate_model_for_provider("local", "all-MiniLM-L6-v2") is True
+        assert embedding_service.validate_model_for_provider("gemini", "embedding-001") is True
         
         # Invalid models
         assert embedding_service.validate_model_for_provider("openai", "invalid-model") is False
-        assert embedding_service.validate_model_for_provider("local", "invalid-model") is False
+        assert embedding_service.validate_model_for_provider("gemini", "invalid-model") is False
     
     @pytest.mark.asyncio
     async def test_generate_embeddings_openai_success(self, embedding_service, mock_client):
@@ -207,7 +189,7 @@ class TestEmbeddingProviderService:
     
     @pytest.mark.asyncio
     async def test_generate_embeddings_with_fallback(self, embedding_service, mock_client):
-        """Test embedding generation with fallback to local provider."""
+        """Test embedding generation with fallback to gemini provider."""
         # Mock primary provider failure
         mock_client.post.side_effect = httpx.ConnectError("Connection failed")
         
@@ -223,8 +205,8 @@ class TestEmbeddingProviderService:
             )
             
             assert len(embeddings) == 2
-            assert used_provider == "local"
-            assert used_model in embedding_service.get_available_models("local")
+            assert used_provider == "gemini"
+            assert used_model in embedding_service.get_available_models("gemini")
     
     @pytest.mark.asyncio
     async def test_retry_operation_success_after_failure(self, embedding_service, mock_client):
@@ -256,7 +238,6 @@ class TestEmbeddingProviderService:
         assert isinstance(all_info, dict)
         assert "openai" in all_info
         assert "gemini" in all_info
-        assert "local" in all_info
         
         for provider_info in all_info.values():
             assert "name" in provider_info
@@ -431,74 +412,7 @@ class TestGeminiEmbeddingProvider:
             gemini_provider.get_embedding_dimension("invalid-model")
 
 
-class TestLocalEmbeddingProvider:
-    """Test cases for LocalEmbeddingProvider."""
-    
-    @pytest.fixture
-    def local_provider(self):
-        """Create a local embedding provider instance."""
-        return LocalEmbeddingProvider()
-    
-    def test_provider_properties(self, local_provider):
-        """Test provider properties."""
-        assert local_provider.provider_name == "local"
-        assert local_provider.base_url is None
-        assert local_provider.requires_api_key is False
-    
-    @pytest.mark.asyncio
-    async def test_validate_api_key(self, local_provider):
-        """Test API key validation (should always return True)."""
-        result = await local_provider.validate_api_key(None)
-        assert result is True
-        
-        result = await local_provider.validate_api_key("any-key")
-        assert result is True
-    
-    def test_get_available_models(self, local_provider):
-        """Test getting available models."""
-        models = local_provider.get_available_models()
-        
-        assert "all-MiniLM-L6-v2" in models
-        assert "all-mpnet-base-v2" in models
-        assert "multi-qa-MiniLM-L6-cos-v1" in models
-    
-    def test_get_embedding_dimension(self, local_provider):
-        """Test getting embedding dimensions."""
-        assert local_provider.get_embedding_dimension("all-MiniLM-L6-v2") == 384
-        assert local_provider.get_embedding_dimension("all-mpnet-base-v2") == 768
-        assert local_provider.get_embedding_dimension("multi-qa-MiniLM-L6-cos-v1") == 384
-    
-    @pytest.mark.asyncio
-    async def test_generate_embeddings_mock(self, local_provider):
-        """Test embedding generation with mocked sentence transformers."""
-        # Mock the _load_model method directly
-        with patch.object(local_provider, '_load_model') as mock_load:
-            mock_model = Mock()
-            mock_model.encode.return_value = [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]
-            mock_load.return_value = mock_model
-            
-            embeddings = await local_provider.generate_embeddings(
-                ["Hello", "World"], "all-MiniLM-L6-v2"
-            )
-            
-            assert len(embeddings) == 2
-            assert embeddings[0] == [0.1, 0.2, 0.3]
-            assert embeddings[1] == [0.4, 0.5, 0.6]
-            mock_model.encode.assert_called_once_with(["Hello", "World"], convert_to_tensor=False)
-    
-    @pytest.mark.asyncio
-    async def test_generate_embeddings_import_error(self, local_provider):
-        """Test embedding generation when sentence-transformers is not installed."""
-        # Mock the import to raise ImportError
-        with patch.dict('sys.modules', {'sentence_transformers': None}):
-            with patch('builtins.__import__', side_effect=ImportError("No module named 'sentence_transformers'")):
-                with pytest.raises(HTTPException) as exc_info:
-                    await local_provider.generate_embeddings(
-                        ["Hello"], "all-MiniLM-L6-v2"
-                    )
-                
-                assert exc_info.value.status_code == 500
-                assert "sentence-transformers library not installed" in str(exc_info.value.detail)
+
 
 
 class TestEmbeddingClientFactory:
@@ -520,7 +434,6 @@ class TestEmbeddingClientFactory:
         
         assert "openai" in providers
         assert "gemini" in providers
-        assert "local" in providers
     
     def test_get_provider_success(self, factory):
         """Test getting a valid provider."""
@@ -529,9 +442,6 @@ class TestEmbeddingClientFactory:
         
         provider = factory.get_provider("gemini")
         assert isinstance(provider, GeminiEmbeddingProvider)
-        
-        provider = factory.get_provider("local")
-        assert isinstance(provider, LocalEmbeddingProvider)
     
     def test_get_provider_invalid(self, factory):
         """Test getting an invalid provider."""
@@ -548,19 +458,17 @@ class TestEmbeddingClientFactory:
         assert isinstance(all_models, dict)
         assert "openai" in all_models
         assert "gemini" in all_models
-        assert "local" in all_models
         
         assert "text-embedding-3-small" in all_models["openai"]
         assert "embedding-001" in all_models["gemini"]
-        assert "all-MiniLM-L6-v2" in all_models["local"]
     
     def test_get_embedding_dimension(self, factory):
         """Test getting embedding dimensions."""
         dim = factory.get_embedding_dimension("openai", "text-embedding-3-small")
         assert dim == 1536
         
-        dim = factory.get_embedding_dimension("local", "all-MiniLM-L6-v2")
-        assert dim == 384
+        dim = factory.get_embedding_dimension("gemini", "embedding-001")
+        assert dim == 768
     
     @pytest.mark.asyncio
     async def test_validate_api_key(self, factory, mock_client):
@@ -569,12 +477,13 @@ class TestEmbeddingClientFactory:
         mock_response = Mock()
         mock_response.status_code = 200
         mock_client.get.return_value = mock_response
+        mock_client.post.return_value = mock_response
         
         result = await factory.validate_api_key("openai", "test-key")
         assert result is True
         
-        # Local provider should always return True
-        result = await factory.validate_api_key("local", None)
+        # Test with Gemini provider (uses POST)
+        result = await factory.validate_api_key("gemini", "test-key")
         assert result is True
     
     @pytest.mark.asyncio

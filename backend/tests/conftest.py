@@ -13,7 +13,16 @@ from app.core.config import settings
 
 
 # Create test database engine - using PostgreSQL for testing
-SQLALCHEMY_DATABASE_URL = "postgresql://postgres:password@localhost:5432/multi_bot_rag_test"
+# Use the same database as development but with a different database name for isolation
+import os
+
+# Check if we're running in Docker or locally
+if os.getenv("DOCKER_ENV") == "true":
+    # Docker environment - use service names
+    SQLALCHEMY_DATABASE_URL = "postgresql://postgres:password@postgres-test:5432/multi_bot_rag_test"
+else:
+    # Local environment - use localhost with mapped port
+    SQLALCHEMY_DATABASE_URL = "postgresql://postgres:password@localhost:5434/multi_bot_rag_test"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,

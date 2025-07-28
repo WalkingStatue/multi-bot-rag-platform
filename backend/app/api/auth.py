@@ -148,14 +148,20 @@ async def change_password(
 
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
-async def logout():
+async def logout(
+    auth_service: AuthService = Depends(get_auth_service)
+):
     """
     Logout user (client-side token removal).
     
+    Args:
+        auth_service: Authentication service
+        
     Returns:
         Success message
     """
     # In a JWT-based system, logout is typically handled client-side
     # by removing the tokens from storage. Server-side logout would
     # require token blacklisting, which is not implemented here.
+    # For now, we'll just return a success message.
     return {"message": "Logged out successfully"}

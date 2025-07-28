@@ -7,6 +7,12 @@ from .llm_service import LLMProviderService
 from .embedding_service import EmbeddingProviderService
 from .permission_service import PermissionService
 from .bot_service import BotService
+from .vector_store import (
+    VectorStoreInterface,
+    QdrantVectorStore,
+    VectorStoreFactory,
+    VectorService
+)
 
 __all__ = [
     "AuthService",
@@ -15,4 +21,8 @@ __all__ = [
     "EmbeddingProviderService",
     "PermissionService",
     "BotService",
+    "VectorStoreInterface",
+    "QdrantVectorStore",
+    "VectorStoreFactory",
+    "VectorService",
 ]

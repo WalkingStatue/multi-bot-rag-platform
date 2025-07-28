@@ -12,7 +12,6 @@ from .gemini_provider import GeminiProvider
 from .embedding_base import BaseEmbeddingProvider
 from .openai_embedding_provider import OpenAIEmbeddingProvider
 from .gemini_embedding_provider import GeminiEmbeddingProvider
-from .local_embedding_provider import LocalEmbeddingProvider
 
 __all__ = [
     # LLM providers
@@ -24,6 +23,5 @@ __all__ = [
     # Embedding providers
     "BaseEmbeddingProvider",
     "OpenAIEmbeddingProvider",
-    "GeminiEmbeddingProvider",
-    "LocalEmbeddingProvider"
+    "GeminiEmbeddingProvider"
 ]

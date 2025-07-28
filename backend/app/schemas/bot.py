@@ -98,3 +98,54 @@ class BotPermissionResponse(BotPermissionBase):
 class BotTransferRequest(BaseModel):
     """Schema for bot ownership transfer request."""
     new_owner_id: uuid.UUID
+
+
+# Collaboration and invitation schemas
+class CollaboratorInvite(BaseModel):
+    """Schema for inviting collaborators by email or username."""
+    identifier: str = Field(..., min_length=1, max_length=255)  # email or username
+    role: str = Field(..., pattern="^(admin|editor|viewer)$")
+    message: Optional[str] = Field(None, max_length=500)  # optional invitation message
+
+
+class BulkPermissionUpdate(BaseModel):
+    """Schema for bulk permission updates."""
+    user_permissions: List[Dict[str, Any]] = Field(..., min_items=1, max_items=50)
+    # Each item should have: {"user_id": "uuid", "role": "role_name"}
+
+
+class PermissionHistoryResponse(BaseModel):
+    """Schema for permission history response."""
+    id: uuid.UUID
+    bot_id: uuid.UUID
+    user_id: uuid.UUID
+    username: str
+    action: str  # 'granted', 'updated', 'revoked'
+    old_role: Optional[str]
+    new_role: Optional[str]
+    granted_by: Optional[uuid.UUID]
+    granted_by_username: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ActivityLogResponse(BaseModel):
+    """Schema for activity log response."""
+    id: uuid.UUID
+    bot_id: uuid.UUID
+    user_id: Optional[uuid.UUID]
+    username: Optional[str]
+    action: str
+    details: Optional[Dict[str, Any]]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CollaboratorInviteResponse(BaseModel):
+    """Schema for collaborator invitation response."""
+    success: bool
+    message: str
+    user_id: Optional[uuid.UUID] = None
+    permission: Optional[BotPermissionResponse] = None

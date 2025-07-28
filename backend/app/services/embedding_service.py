@@ -318,12 +318,12 @@ class EmbeddingProviderService:
     
     async def get_fallback_provider(self) -> Tuple[str, str]:
         """
-        Get the fallback provider and model (local provider).
+        Get the fallback provider and model (Gemini provider).
         
         Returns:
             Tuple of (provider_name, model_name)
         """
-        fallback_provider = "local"
+        fallback_provider = "gemini"
         fallback_models = self.get_available_models(fallback_provider)
         
         if not fallback_models:

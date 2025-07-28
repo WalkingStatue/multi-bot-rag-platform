@@ -16,7 +16,6 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379"
     
     # Vector Store
-    vector_store_type: str = "qdrant"  # or 'faiss'
     qdrant_url: str = "http://localhost:6333"
     
     # Security
