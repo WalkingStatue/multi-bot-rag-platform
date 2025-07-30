@@ -3,6 +3,7 @@ User management service for profile operations and collaboration features.
 """
 from typing import List, Optional
 from sqlalchemy.orm import Session
+import uuid
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_, and_, func, desc
 from fastapi import HTTPException, status
@@ -229,6 +230,33 @@ class UserService:
         
         return [APIKeyResponse.model_validate(key) for key in api_keys]
     
+    def get_user_api_key(self, user_id: uuid.UUID, provider: str) -> Optional[str]:
+        """
+        Get decrypted API key for a provider by user ID.
+        
+        Args:
+            user_id: User ID
+            provider: Provider name
+            
+        Returns:
+            Decrypted API key or None if not found
+        """
+        api_key = self.db.query(UserAPIKey).filter(
+            and_(
+                UserAPIKey.user_id == user_id,
+                UserAPIKey.provider == provider,
+                UserAPIKey.is_active == True
+            )
+        ).first()
+        
+        if not api_key:
+            return None
+        
+        try:
+            return decrypt_api_key(api_key.api_key_encrypted)
+        except Exception:
+            return None
+    
     def get_api_key(self, user: User, provider: str) -> Optional[str]:
         """
         Get decrypted API key for a provider.
@@ -292,6 +320,7 @@ class UserService:
             api_key.api_key_encrypted = encrypted_key
             if api_key_data.is_active is not None:
                 api_key.is_active = api_key_data.is_active
+            # updated_at will be automatically set by the database due to onupdate=func.now()
             
             self.db.commit()
             self.db.refresh(api_key)
@@ -360,19 +389,31 @@ class UserService:
         
         if not settings:
             # Create default settings if none exist
-            settings = UserSettings(
-                user_id=user.id,
-                theme="light",
-                language="en",
-                timezone="UTC",
-                notifications_enabled=True,
-                email_notifications=True,
-                max_conversation_history=50,
-                auto_save_conversations=True
-            )
-            self.db.add(settings)
-            self.db.commit()
-            self.db.refresh(settings)
+            try:
+                settings = UserSettings(
+                    user_id=user.id,
+                    theme="light",
+                    language="en",
+                    timezone="UTC",
+                    notifications_enabled=True,
+                    email_notifications=True,
+                    max_conversation_history=50,
+                    auto_save_conversations=True
+                )
+                self.db.add(settings)
+                self.db.commit()
+                self.db.refresh(settings)
+            except IntegrityError:
+                self.db.rollback()
+                # Try to get settings again in case another process created them
+                settings = self.db.query(UserSettings).filter(
+                    UserSettings.user_id == user.id
+                ).first()
+                if not settings:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Failed to create user settings"
+                    )
         
         return UserSettingsResponse.model_validate(settings)
     
@@ -396,8 +437,20 @@ class UserService:
         
         if not settings:
             # Create new settings if none exist
-            settings = UserSettings(user_id=user.id)
-            self.db.add(settings)
+            try:
+                settings = UserSettings(user_id=user.id)
+                self.db.add(settings)
+            except IntegrityError:
+                self.db.rollback()
+                # Try to get settings again in case another process created them
+                settings = self.db.query(UserSettings).filter(
+                    UserSettings.user_id == user.id
+                ).first()
+                if not settings:
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="Failed to create user settings"
+                    )
         
         # Update fields
         update_data = updates.model_dump(exclude_unset=True)

@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.api import auth, users, bots, permissions, documents, conversations, websocket
+from app.api import auth, users, bots, permissions, documents, conversations, websocket, analytics
 
 app = FastAPI(
     title="Multi-Bot RAG Platform",
@@ -31,6 +31,7 @@ app.include_router(permissions.router, prefix="/api")
 app.include_router(documents.router, prefix="/api")
 app.include_router(conversations.router, prefix="/api")
 app.include_router(websocket.router, prefix="/api")
+app.include_router(analytics.router, prefix="/api")
 
 
 @app.get("/")

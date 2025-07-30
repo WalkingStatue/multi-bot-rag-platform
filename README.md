@@ -1,192 +1,422 @@
 # Multi-Bot RAG Platform
 
-A comprehensive full-stack multi-bot assistant platform that enables users to create, manage, and collaborate on AI-powered chatbots with document-based knowledge retrieval (RAG). The platform supports multiple LLM providers, role-based access control, and real-time collaboration features.
+A comprehensive full-stack multi-bot assistant platform that enables users to create, manage, and collaborate on AI-powered chatbots with document-based knowledge retrieval (RAG).
 
-## Features
+## 🚀 Quick Start (Windows)
 
-- **Multi-LLM Support**: Configure different LLM providers (OpenAI, Anthropic, OpenRouter, Gemini) for each bot
-- **Complete Data Isolation**: Each bot operates with isolated data including conversations, documents, and vector embeddings
-- **Role-Based Collaboration**: Sophisticated permission system (Owner, Admin, Editor, Viewer) for secure bot sharing
-- **Comprehensive Tracking**: All conversations are logged and searchable across all bots with analytics
-- **Document-Enhanced AI**: Upload PDFs/TXT files to enhance bot knowledge through RAG
+### Prerequisites
 
-## Prerequisites
+- **Docker Desktop** - [Download here](https://www.docker.com/products/docker-desktop)
+- **Git** - [Download here](https://git-scm.com/download/win)
+- **PowerShell 5.1+** (included with Windows 10/11)
 
-**Required Software:**
-1. **Docker Desktop**: Download from [docker.com](https://www.docker.com/products/docker-desktop/)
-2. **Git**: Download from [git-scm.com](https://git-scm.com/downloads)
-3. **VS Code** (Optional): With Docker and Remote-Containers extensions
+### Development Setup
 
-That's it! No need to install Python, Node.js, PostgreSQL, or Redis locally.
+1. **Clone the repository**
+   ```powershell
+   git clone <repository-url>
+   cd multi-bot-rag-platform
+   ```
 
-## Quick Start
+2. **Run the setup script**
+   ```powershell
+   # Using PowerShell (recommended)
+   .\scripts\dev-setup.ps1
+   
+   # Or using batch file
+   .\scripts\dev-setup.bat
+   ```
 
-1. **Clone the repository**:
-```bash
-git clone <repository-url>
-cd multi-bot-rag-platform
+3. **Access the application**
+   - Frontend: http://localhost:3000
+   - Backend API: http://localhost:8000
+   - API Documentation: http://localhost:8000/docs
+
+## 🏗️ Architecture
+
+### Technology Stack
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| **Frontend** | React + TypeScript + Vite | Modern UI with real-time updates |
+| **Backend** | FastAPI + Python | RESTful API with async support |
+| **Database** | PostgreSQL 15 | Relational data with JSONB support |
+| **Cache** | Redis 7 | Session cache and rate limiting |
+| **Vector DB** | Qdrant | Embeddings and similarity search |
+| **Reverse Proxy** | Nginx | Load balancing and SSL termination |
+
+### Key Features
+
+- 🤖 **Multi-LLM Support** - OpenAI, Anthropic, OpenRouter, Gemini
+- 🔒 **Complete Data Isolation** - Each bot operates with isolated data
+- 👥 **Role-Based Collaboration** - Owner, Admin, Editor, Viewer permissions
+- 📊 **Comprehensive Tracking** - All conversations logged and searchable
+- 📄 **Document-Enhanced AI** - Upload PDFs/TXT for RAG functionality
+- ⚡ **Real-time Updates** - WebSocket-based live collaboration
+
+## 🐳 Docker Environments
+
+### Development Environment
+
+**Start development environment:**
+```powershell
+docker compose up --build
 ```
 
-2. **Set up environment variables**:
-```bash
-cp .env.example .env
-# Edit .env file with your configuration
-```
-
-3. **Start the entire application**:
-```bash
-# Build and start all services
-docker-compose up --build
-
-# Or run in background
-docker-compose up -d --build
-```
-
-4. **Access your application**:
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:8000
-- API Documentation: http://localhost:8000/docs
+**Services:**
+- Frontend: http://localhost:3000 (with hot reload)
+- Backend: http://localhost:8000 (with auto-reload)
 - PostgreSQL: localhost:5433
 - Redis: localhost:6380
 - Qdrant: http://localhost:6335
 
-## Development Commands
-
-```bash
+**Useful commands:**
+```powershell
 # View logs
-docker-compose logs -f backend
-docker-compose logs -f frontend
+docker compose logs -f backend
+docker compose logs -f frontend
 
-# Stop all services
-docker-compose down
+# Restart a service
+docker compose restart backend
 
-# Rebuild specific service
-docker-compose build backend
-docker-compose up backend
+# Run database migrations
+docker compose exec backend alembic upgrade head
 
-# Run tests
-docker-compose exec backend pytest
-docker-compose exec frontend npm test
+# Access database
+docker compose exec postgres psql -U postgres -d multi_bot_rag_dev
 
-# Access container shell
-docker-compose exec backend bash
-docker-compose exec frontend sh
+# Stop environment
+docker compose down
 ```
 
-## Production Deployment
+### Testing Environment
 
-```bash
-# Production build and deploy
-docker-compose -f docker-compose.prod.yml up -d --build
+**Run all tests:**
+```powershell
+.\scripts\test-runner.ps1 -TestType all -Coverage
+```
+
+**Run specific test types:**
+```powershell
+# Unit tests only
+.\scripts\test-runner.ps1 -TestType unit
+
+# Integration tests only
+.\scripts\test-runner.ps1 -TestType integration
+
+# Frontend tests only
+.\scripts\test-runner.ps1 -TestType frontend
+
+# End-to-end tests only
+.\scripts\test-runner.ps1 -TestType e2e
+```
+
+**Manual test environment:**
+```powershell
+# Start test services
+docker compose -f docker-compose.test.yml up --build
+
+# Run specific tests
+docker compose -f docker-compose.test.yml run --rm backend-unit-test
+docker compose -f docker-compose.test.yml run --rm frontend-test
+
+# Clean up
+docker compose -f docker-compose.test.yml down --volumes
+```
+
+### Production Environment
+
+**Setup production environment:**
+
+1. **Create production configuration:**
+   ```powershell
+   copy .env.prod.example .env.prod
+   # Edit .env.prod with your production settings
+   ```
+
+2. **Deploy to production:**
+   ```powershell
+   # Full deployment with build and migrations
+   .\scripts\prod-deploy.ps1 -Build -Migrate -Scale -BackendReplicas 3 -FrontendReplicas 2
+
+   # Quick deployment (existing images)
+   .\scripts\prod-deploy.ps1
+
+   # With monitoring enabled
+   .\scripts\prod-deploy.ps1 -Monitor
+   ```
+
+**Production services:**
+- Application: http://localhost (or your domain)
+- API Documentation: http://localhost/api/docs
+
+**Production management:**
+```powershell
+# View production logs
+docker compose -f docker-compose.prod.yml logs -f
 
 # Scale services
-docker-compose -f docker-compose.prod.yml up -d --scale backend=3 --scale frontend=2
+docker compose -f docker-compose.prod.yml up -d --scale backend=4 --scale frontend=3
+
+# Update deployment
+docker compose -f docker-compose.prod.yml up -d --build
+
+# Stop production
+docker compose -f docker-compose.prod.yml down
 ```
 
-## Architecture
+## 🔧 Configuration
 
-### Services
+### Environment Files
 
-- **Frontend**: React + TypeScript with Vite
-- **Backend**: FastAPI + Python with async support
-- **Database**: PostgreSQL 15 with JSONB support
-- **Cache**: Redis for session storage and rate limiting
-- **Vector Store**: Qdrant for embeddings and similarity search
-- **Reverse Proxy**: Nginx (production only)
+- **`.env.dev`** - Development configuration (auto-loaded)
+- **`.env.test`** - Testing configuration (auto-loaded)
+- **`.env.prod`** - Production configuration (create from `.env.prod.example`)
 
-### Project Structure
+### Key Configuration Options
 
-```
-multi-bot-rag-platform/
-├── backend/                 # FastAPI Python backend
-│   ├── app/
-│   │   ├── api/            # API route handlers
-│   │   ├── core/           # Core application logic
-│   │   ├── models/         # SQLAlchemy database models
-│   │   ├── services/       # Business logic services
-│   │   └── utils/          # Utility functions
-│   ├── tests/              # Test files
-│   ├── requirements.txt    # Python dependencies
-│   └── Dockerfile         # Docker configuration
-├── frontend/               # React TypeScript frontend
-│   ├── src/
-│   │   ├── components/     # Reusable UI components
-│   │   ├── pages/          # Page-level components
-│   │   ├── services/       # API and external services
-│   │   └── utils/          # Utility functions
-│   ├── package.json        # Node.js dependencies
-│   └── Dockerfile         # Docker configuration
-├── docker-compose.yml      # Development environment
-├── docker-compose.prod.yml # Production environment
-└── .env.example           # Environment variables template
-```
-
-## Environment Variables
-
-Key environment variables (see `.env.example` for complete list):
-
-```env
+```bash
 # Database
-DATABASE_URL=postgresql://postgres:password@postgres:5432/multi_bot_rag
+DATABASE_URL=postgresql://user:password@host:port/database
 
 # Redis
-REDIS_URL=redis://redis:6379
+REDIS_URL=redis://host:port
+REDIS_PASSWORD=your_password
 
-# Vector Store
-QDRANT_URL=http://qdrant:6333
+# Vector Database
+QDRANT_URL=http://host:port
 
 # Security
-SECRET_KEY=your-secret-key-here
+SECRET_KEY=your-very-long-secret-key
+
+# File Storage
+UPLOAD_DIR=/app/uploads
+MAX_FILE_SIZE=10485760
 
 # Frontend
 VITE_API_URL=http://localhost:8000
 VITE_WS_URL=ws://localhost:8000
 ```
 
-## API Key Configuration
+## 🧪 Testing
 
-Users configure their own API keys through the application:
+### Test Structure
 
-- **OpenAI**: [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-- **Anthropic**: [console.anthropic.com](https://console.anthropic.com/)
-- **Google Gemini**: [makersuite.google.com/app/apikey](https://makersuite.google.com/app/apikey)
-- **OpenRouter**: [openrouter.ai/keys](https://openrouter.ai/keys)
-
-## Health Checks
-
-All services include health checks:
-
-- Backend: `curl http://localhost:8000/health`
-- Frontend: `curl http://localhost:3000`
-- PostgreSQL: `pg_isready -U postgres`
-- Redis: `redis-cli ping`
-- Qdrant: `curl http://localhost:6333/health`
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Port conflicts**: Make sure ports 3000, 8000, 5432, 6379, and 6333 are available
-2. **Docker issues**: Restart Docker Desktop and try again
-3. **Build failures**: Clear Docker cache with `docker system prune -a`
-
-### Logs
-
-Check service logs for debugging:
-```bash
-docker-compose logs backend
-docker-compose logs frontend
-docker-compose logs postgres
+```
+tests/
+├── unit/           # Unit tests for individual components
+├── integration/    # Integration tests for API endpoints
+├── frontend/       # Frontend component and integration tests
+└── e2e/           # End-to-end user workflow tests
 ```
 
-## Contributing
+### Running Tests
+
+```powershell
+# All tests with coverage
+.\scripts\test-runner.ps1 -TestType all -Coverage -Verbose
+
+# Quick unit tests
+.\scripts\test-runner.ps1 -TestType unit
+
+# Integration tests
+.\scripts\test-runner.ps1 -TestType integration
+
+# Frontend tests
+.\scripts\test-runner.ps1 -TestType frontend
+
+# End-to-end tests
+.\scripts\test-runner.ps1 -TestType e2e
+```
+
+### Test Reports
+
+Test results are available in:
+- **Reports**: `test-reports/` (JUnit XML format)
+- **Coverage**: `test-coverage/` (HTML reports)
+
+## 📊 Monitoring & Logging
+
+### Development Monitoring
+
+```powershell
+# View real-time logs
+docker compose logs -f
+
+# Monitor resource usage
+docker stats
+
+# Check service health
+docker compose ps
+```
+
+### Production Monitoring
+
+```powershell
+# Production logs
+docker compose -f docker-compose.prod.yml logs -f
+
+# Service health check
+docker compose -f docker-compose.prod.yml ps
+
+# Resource monitoring
+docker stats
+```
+
+### Log Locations
+
+- **Backend logs**: `backend/logs/`
+- **Frontend logs**: `frontend/logs/`
+- **Nginx logs**: `nginx/logs/`
+- **Database logs**: Available via `docker compose logs postgres`
+
+## 🔒 Security
+
+### Development Security
+
+- Default passwords (change for production)
+- CORS enabled for localhost
+- Debug mode enabled
+- Detailed error messages
+
+### Production Security
+
+- Strong passwords required
+- CORS restricted to your domain
+- Security headers enabled
+- Rate limiting configured
+- SSL/TLS support (configure certificates)
+
+### Security Checklist
+
+- [ ] Change all default passwords
+- [ ] Configure strong SECRET_KEY
+- [ ] Set up SSL certificates
+- [ ] Configure CORS for your domain
+- [ ] Enable rate limiting
+- [ ] Review security headers
+- [ ] Set up monitoring and alerting
+
+## 🚀 Deployment
+
+### Local Development
+
+```powershell
+# Start development environment
+.\scripts\dev-setup.ps1
+
+# Or manually
+docker compose up --build
+```
+
+### Production Deployment
+
+```powershell
+# Full production deployment
+.\scripts\prod-deploy.ps1 -Build -Migrate -Scale -BackendReplicas 3
+
+# Quick update
+.\scripts\prod-deploy.ps1 -Build
+```
+
+### Cloud Deployment
+
+The Docker Compose files can be adapted for cloud deployment:
+
+- **AWS**: Use ECS with the compose files
+- **Azure**: Use Container Instances or AKS
+- **Google Cloud**: Use Cloud Run or GKE
+- **DigitalOcean**: Use App Platform or Droplets
+
+## 🛠️ Development
+
+### Project Structure
+
+```
+multi-bot-rag-platform/
+├── backend/                 # FastAPI Python backend
+├── frontend/               # React TypeScript frontend
+├── nginx/                  # Nginx configuration
+├── scripts/                # Deployment and utility scripts
+├── docker-compose.yml      # Development environment
+├── docker-compose.prod.yml # Production environment
+├── docker-compose.test.yml # Testing environment
+└── README.md              # This file
+```
+
+### Adding New Features
+
+1. **Backend**: Add to `backend/app/`
+2. **Frontend**: Add to `frontend/src/`
+3. **Tests**: Add to appropriate test directories
+4. **Documentation**: Update README and API docs
+
+### Database Migrations
+
+```powershell
+# Create new migration
+docker compose exec backend alembic revision --autogenerate -m "description"
+
+# Apply migrations
+docker compose exec backend alembic upgrade head
+
+# Rollback migration
+docker compose exec backend alembic downgrade -1
+```
+
+## 📚 API Documentation
+
+- **Development**: http://localhost:8000/docs
+- **Production**: http://yourdomain.com/api/docs
+
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run tests: `docker-compose exec backend pytest`
+4. Run tests: `.\scripts\test-runner.ps1 -TestType all`
 5. Submit a pull request
 
-## License
+## 📄 License
 
-This project is licensed under the MIT License.
+[Your License Here]
+
+## 🆘 Troubleshooting
+
+### Common Issues
+
+**Docker Desktop not running:**
+```powershell
+# Start Docker Desktop and wait for it to be ready
+# Check with: docker --version
+```
+
+**Port conflicts:**
+```powershell
+# Check what's using the ports
+netstat -an | findstr :3000
+netstat -an | findstr :8000
+
+# Stop conflicting services or change ports in docker-compose.yml
+```
+
+**Database connection issues:**
+```powershell
+# Reset database
+docker compose down -v
+docker compose up --build
+```
+
+**Permission issues:**
+```powershell
+# Run PowerShell as Administrator
+# Or check Docker Desktop settings for file sharing
+```
+
+### Getting Help
+
+- Check the logs: `docker compose logs -f [service]`
+- Verify service health: `docker compose ps`
+- Reset environment: `docker compose down -v && docker compose up --build`
+
+For more help, please open an issue in the repository.

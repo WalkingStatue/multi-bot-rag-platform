@@ -4,6 +4,7 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
 
 const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
+const API_PREFIX = '/api';
 
 class APIClient {
   private client: AxiosInstance;
@@ -43,7 +44,7 @@ class APIClient {
           try {
             const refreshToken = localStorage.getItem('refresh_token');
             if (refreshToken) {
-              const response = await this.client.post('/auth/refresh', {
+              const response = await this.client.post(`${API_PREFIX}/auth/refresh`, {
                 refresh_token: refreshToken,
               });
 
@@ -68,20 +69,24 @@ class APIClient {
     );
   }
 
+  private getFullUrl(url: string): string {
+    return `${API_PREFIX}${url}`;
+  }
+
   async get<T = any>(url: string, config?: any): Promise<AxiosResponse<T>> {
-    return this.client.get<T>(url, config);
+    return this.client.get<T>(this.getFullUrl(url), config);
   }
 
   async post<T = any>(url: string, data?: any, config?: any): Promise<AxiosResponse<T>> {
-    return this.client.post<T>(url, data, config);
+    return this.client.post<T>(this.getFullUrl(url), data, config);
   }
 
   async put<T = any>(url: string, data?: any, config?: any): Promise<AxiosResponse<T>> {
-    return this.client.put<T>(url, data, config);
+    return this.client.put<T>(this.getFullUrl(url), data, config);
   }
 
   async delete<T = any>(url: string, config?: any): Promise<AxiosResponse<T>> {
-    return this.client.delete<T>(url, config);
+    return this.client.delete<T>(this.getFullUrl(url), config);
   }
 }
 

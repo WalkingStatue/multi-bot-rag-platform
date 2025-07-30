@@ -84,7 +84,7 @@ class DocumentService:
             HTTPException: If permission denied or processing fails
         """
         # Check permissions - user must be editor or higher
-        if not await self.permission_service.check_bot_permission(
+        if not self.permission_service.check_bot_permission(
             user_id, bot_id, "editor"
         ):
             raise HTTPException(
@@ -175,7 +175,7 @@ class DocumentService:
             )
         
         # Check permissions
-        if not await self.permission_service.check_bot_permission(
+        if not self.permission_service.check_bot_permission(
             user_id, document.bot_id, "editor"
         ):
             raise HTTPException(
@@ -387,7 +387,7 @@ class DocumentService:
             HTTPException: If permission denied
         """
         # Check permissions - user must be viewer or higher
-        if not await self.permission_service.check_bot_permission(
+        if not self.permission_service.check_bot_permission(
             user_id, bot_id, "viewer"
         ):
             raise HTTPException(
@@ -450,7 +450,7 @@ class DocumentService:
             )
         
         # Check permissions
-        if not await self.permission_service.check_bot_permission(
+        if not self.permission_service.check_bot_permission(
             user_id, document.bot_id, "viewer"
         ):
             raise HTTPException(
@@ -523,7 +523,7 @@ class DocumentService:
             HTTPException: If permission denied or search fails
         """
         # Check permissions
-        if not await self.permission_service.check_bot_permission(
+        if not self.permission_service.check_bot_permission(
             user_id, bot_id, "viewer"
         ):
             raise HTTPException(
@@ -605,7 +605,7 @@ class DocumentService:
             HTTPException: If permission denied
         """
         # Check permissions
-        if not await self.permission_service.check_bot_permission(
+        if not self.permission_service.check_bot_permission(
             user_id, bot_id, "viewer"
         ):
             raise HTTPException(

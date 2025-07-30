@@ -75,14 +75,16 @@ async def change_password(
         Success message
     """
     auth_service = AuthService(db)
-    success = auth_service.change_password(
-        current_user,
-        password_data.current_password,
-        password_data.new_password
-    )
-    if success:
+    try:
+        auth_service.change_password(
+            current_user,
+            password_data.current_password,
+            password_data.new_password
+        )
         return {"message": "Password changed successfully"}
-    else:
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to change password"
@@ -241,13 +243,13 @@ async def get_supported_providers(
     """
     llm_service = LLMProviderService()
     try:
-        providers = llm_service.get_supported_providers()
+        providers = await llm_service.get_supported_providers()
         provider_info = {}
         
         for provider in providers:
             provider_info[provider] = {
                 "name": provider,
-                "models": llm_service.get_available_models(provider)
+                "models": await llm_service.get_available_models(provider)
             }
         
         return {

@@ -95,17 +95,29 @@ async def websocket_chat_endpoint(
                     
             except json.JSONDecodeError:
                 logger.error("Invalid JSON received from WebSocket")
-                await websocket.send_text(json.dumps({
-                    "type": "error",
-                    "message": "Invalid JSON format"
-                }))
+                try:
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "message": "Invalid JSON format"
+                    }))
+                except:
+                    # If we can't send error message, connection is likely broken
+                    break
+            
+            except WebSocketDisconnect:
+                # Re-raise WebSocketDisconnect to be handled by outer try-catch
+                raise
             
             except Exception as e:
                 logger.error(f"Error processing WebSocket message: {e}")
-                await websocket.send_text(json.dumps({
-                    "type": "error",
-                    "message": "Error processing message"
-                }))
+                try:
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "message": "Error processing message"
+                    }))
+                except:
+                    # If we can't send error message, connection is likely broken
+                    break
     
     except WebSocketDisconnect:
         logger.info(f"WebSocket disconnected for user {user.id if user else 'unknown'}")
@@ -178,17 +190,29 @@ async def websocket_notifications_endpoint(
                     
             except json.JSONDecodeError:
                 logger.error("Invalid JSON received from notifications WebSocket")
-                await websocket.send_text(json.dumps({
-                    "type": "error",
-                    "message": "Invalid JSON format"
-                }))
+                try:
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "message": "Invalid JSON format"
+                    }))
+                except:
+                    # If we can't send error message, connection is likely broken
+                    break
+            
+            except WebSocketDisconnect:
+                # Re-raise WebSocketDisconnect to be handled by outer try-catch
+                raise
             
             except Exception as e:
                 logger.error(f"Error processing notifications WebSocket message: {e}")
-                await websocket.send_text(json.dumps({
-                    "type": "error",
-                    "message": "Error processing message"
-                }))
+                try:
+                    await websocket.send_text(json.dumps({
+                        "type": "error",
+                        "message": "Error processing message"
+                    }))
+                except:
+                    # If we can't send error message, connection is likely broken
+                    break
     
     except WebSocketDisconnect:
         logger.info(f"Notifications WebSocket disconnected for user {user.id if user else 'unknown'}")

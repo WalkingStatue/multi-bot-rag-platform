@@ -125,7 +125,7 @@ class UserSettings(BaseModel):
     notifications_enabled: Optional[bool] = True
     email_notifications: Optional[bool] = True
     default_llm_provider: Optional[str] = Field(None, pattern="^(openai|anthropic|openrouter|gemini)$")
-    default_embedding_provider: Optional[str] = Field(None, pattern="^(openai|gemini|local)$")
+    default_embedding_provider: Optional[str] = Field(None, pattern="^(openai|gemini)$")
     max_conversation_history: Optional[int] = Field(50, ge=10, le=200)
     auto_save_conversations: Optional[bool] = True
 
@@ -138,7 +138,7 @@ class UserSettingsUpdate(BaseModel):
     notifications_enabled: Optional[bool] = None
     email_notifications: Optional[bool] = None
     default_llm_provider: Optional[str] = Field(None, pattern="^(openai|anthropic|openrouter|gemini)$")
-    default_embedding_provider: Optional[str] = Field(None, pattern="^(openai|gemini|local)$")
+    default_embedding_provider: Optional[str] = Field(None, pattern="^(openai|gemini)$")
     max_conversation_history: Optional[int] = Field(None, ge=10, le=200)
     auto_save_conversations: Optional[bool] = None
 

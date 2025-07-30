@@ -302,7 +302,6 @@ class AuthService:
         
         try:
             self.db.commit()
-            return True
         except Exception:
             self.db.rollback()
             raise HTTPException(
