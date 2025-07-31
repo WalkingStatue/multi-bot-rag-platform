@@ -101,7 +101,7 @@ class AnthropicProvider(BaseLLMProvider):
             )
     
     def get_available_models(self) -> List[str]:
-        """Get list of available Anthropic models."""
+        """Get list of available Anthropic models (static fallback)."""
         return [
             "claude-3-opus-20240229",
             "claude-3-sonnet-20240229",
@@ -110,3 +110,12 @@ class AnthropicProvider(BaseLLMProvider):
             "claude-2.0",
             "claude-instant-1.2"
         ]
+    
+    async def _fetch_models_from_api(self, api_key: str) -> List[str]:
+        """
+        Fetch available models from Anthropic API.
+        Note: Anthropic doesn't have a models endpoint, so we use the static list.
+        """
+        # Anthropic doesn't provide a models endpoint, so we return the static list
+        # but we could potentially test each model to see which ones work
+        return self.get_available_models()

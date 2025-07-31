@@ -119,11 +119,46 @@ class GeminiEmbeddingProvider(BaseEmbeddingProvider):
             )
     
     def get_available_models(self) -> List[str]:
-        """Get list of available Gemini embedding models."""
+        """Get list of available Gemini embedding models (static fallback)."""
         return [
             "embedding-001",
             "text-embedding-004"
         ]
+    
+    async def get_available_models_dynamic(self, api_key: str) -> List[str]:
+        """Get list of available Gemini embedding models from API."""
+        if not api_key:
+            return self.get_available_models()
+        
+        try:
+            response = await self.client.get(
+                f"{self.base_url}/models",
+                params={"key": api_key}
+            )
+            
+            if response.status_code != 200:
+                logger.warning(f"Failed to fetch Gemini models: {response.status_code}")
+                return self.get_available_models()
+            
+            result = response.json()
+            embedding_models = []
+            
+            for model in result.get("models", []):
+                model_name = model.get("name", "")
+                # Extract model ID from full name (e.g., "models/embedding-001" -> "embedding-001")
+                if "embedding" in model_name.lower():
+                    model_id = model_name.split("/")[-1] if "/" in model_name else model_name
+                    embedding_models.append(model_id)
+            
+            # Sort models
+            embedding_models.sort()
+            
+            # Return dynamic models if found, otherwise fallback to static
+            return embedding_models if embedding_models else self.get_available_models()
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch Gemini embedding models: {e}")
+            return self.get_available_models()
     
     def get_embedding_dimension(self, model: str) -> int:
         """Get embedding dimension for Gemini models."""

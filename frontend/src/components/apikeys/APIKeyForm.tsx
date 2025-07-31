@@ -60,13 +60,46 @@ export const APIKeyForm: React.FC<APIKeyFormProps> = ({
 
     try {
       const { apiKeyService } = await import('../../services/apiKeyService');
-      const result = await apiKeyService.validateAPIKey(formData.provider, formData.api_key);
+      
+      // Try LLM validation first
+      let result;
+      try {
+        result = await apiKeyService.validateAPIKey(formData.provider, formData.api_key);
+      } catch (llmError) {
+        // If LLM validation fails, try embedding validation
+        try {
+          result = await apiKeyService.validateEmbeddingAPIKey(formData.provider, formData.api_key);
+        } catch (embeddingError) {
+          throw new Error('Failed to validate API key for both LLM and embedding services');
+        }
+      }
       
       setValidationStatus({
         isValidating: false,
         isValid: result.valid,
         message: result.message,
       });
+
+      // If validation is successful, try to fetch dynamic models
+      if (result.valid) {
+        try {
+          // Try to fetch both LLM and embedding models
+          const [llmModels, embeddingModels] = await Promise.allSettled([
+            apiKeyService.getProviderModels(formData.provider),
+            apiKeyService.getEmbeddingProviderModels(formData.provider)
+          ]);
+          
+          if (llmModels.status === 'fulfilled') {
+            console.log(`Fetched ${llmModels.value.models.length} LLM models from ${formData.provider} API:`, llmModels.value.models);
+          }
+          
+          if (embeddingModels.status === 'fulfilled') {
+            console.log(`Fetched ${embeddingModels.value.models.length} embedding models from ${formData.provider} API:`, embeddingModels.value.models);
+          }
+        } catch (error) {
+          console.warn('Failed to fetch dynamic models after validation:', error);
+        }
+      }
     } catch (error) {
       setValidationStatus({
         isValidating: false,

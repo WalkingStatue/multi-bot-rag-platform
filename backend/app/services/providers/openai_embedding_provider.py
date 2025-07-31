@@ -115,12 +115,47 @@ class OpenAIEmbeddingProvider(BaseEmbeddingProvider):
             )
     
     def get_available_models(self) -> List[str]:
-        """Get list of available OpenAI embedding models."""
+        """Get list of available OpenAI embedding models (static fallback)."""
         return [
             "text-embedding-3-small",
-            "text-embedding-3-large",
+            "text-embedding-3-large", 
             "text-embedding-ada-002"
         ]
+    
+    async def get_available_models_dynamic(self, api_key: str) -> List[str]:
+        """Get list of available OpenAI embedding models from API."""
+        if not api_key:
+            return self.get_available_models()
+        
+        try:
+            headers = self.get_headers(api_key)
+            response = await self.client.get(
+                f"{self.base_url}/models",
+                headers=headers
+            )
+            
+            if response.status_code != 200:
+                logger.warning(f"Failed to fetch OpenAI models: {response.status_code}")
+                return self.get_available_models()
+            
+            result = response.json()
+            embedding_models = []
+            
+            for model in result.get("data", []):
+                model_id = model.get("id", "")
+                # Filter for embedding models
+                if "embedding" in model_id.lower():
+                    embedding_models.append(model_id)
+            
+            # Sort models with newer ones first
+            embedding_models.sort(reverse=True)
+            
+            # Return dynamic models if found, otherwise fallback to static
+            return embedding_models if embedding_models else self.get_available_models()
+            
+        except Exception as e:
+            logger.error(f"Failed to fetch OpenAI embedding models: {e}")
+            return self.get_available_models()
     
     def get_embedding_dimension(self, model: str) -> int:
         """Get embedding dimension for OpenAI models."""

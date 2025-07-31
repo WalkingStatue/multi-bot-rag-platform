@@ -382,7 +382,7 @@ describe('BotForm', () => {
     });
 
     it('should update parameter values with sliders', async () => {
-      const user = userEvent.setup();
+      // const user = userEvent.setup();
 
       render(
         <BotForm

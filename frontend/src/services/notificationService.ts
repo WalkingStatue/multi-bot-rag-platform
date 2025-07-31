@@ -2,7 +2,7 @@
  * Notification service for managing user notifications
  */
 import { apiClient } from './api';
-import { Notification, NotificationSettings } from '../types/notifications';
+import type { Notification, NotificationSettings } from '../types/notifications';
 
 export class NotificationService {
   /**

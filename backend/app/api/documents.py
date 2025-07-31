@@ -2,7 +2,7 @@
 Document management API endpoints.
 """
 import logging
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
@@ -28,7 +28,14 @@ router = APIRouter(prefix="/bots/{bot_id}/documents", tags=["documents"])
 
 def get_document_service(db: Session = Depends(get_db)) -> DocumentService:
     """Get document service instance."""
-    return DocumentService(db)
+    try:
+        return DocumentService(db)
+    except Exception as e:
+        logger.error(f"Failed to create DocumentService: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Service initialization failed: {str(e)}"
+        )
 
 
 @router.post("/", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
@@ -209,11 +216,11 @@ async def search_documents(
         raise
 
 
-@router.get("/stats", response_model=DocumentStatsResponse)
+@router.get("/stats", response_model=Dict[str, Any])
 async def get_document_stats(
     bot_id: UUID,
     current_user: User = Depends(get_current_user),
-    document_service: DocumentService = Depends(get_document_service)
+    db: Session = Depends(get_db)
 ):
     """
     Get statistics about documents for a bot.
@@ -221,13 +228,45 @@ async def get_document_stats(
     Requires viewer permissions or higher.
     """
     try:
-        stats = await document_service.get_bot_document_stats(
-            bot_id=bot_id,
-            user_id=current_user.id
-        )
+        # Check if user has access to the bot
+        from ..models.bot import Bot
+        from ..services.permission_service import PermissionService
         
-        return DocumentStatsResponse(**stats)
+        permission_service = PermissionService(db)
+        if not permission_service.check_bot_permission(current_user.id, bot_id, "view_documents"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to view document statistics"
+            )
         
+        # Get basic document stats from database
+        from ..models.document import Document
+        documents = db.query(Document).filter(Document.bot_id == bot_id).all()
+        
+        total_documents = len(documents)
+        total_size = sum(doc.file_size or 0 for doc in documents)
+        total_chunks = sum(doc.chunk_count or 0 for doc in documents)
+        
+        # Get file type distribution
+        mime_types = {}
+        for doc in documents:
+            mime_type = doc.mime_type or "unknown"
+            mime_types[mime_type] = mime_types.get(mime_type, 0) + 1
+        
+        return {
+            "total_documents": total_documents,
+            "total_file_size": total_size,
+            "total_chunks": total_chunks,
+            "average_chunks_per_document": total_chunks / total_documents if total_documents > 0 else 0,
+            "file_type_distribution": mime_types,
+            "vector_store_stats": {"status": "not_implemented", "note": "Vector store integration pending"}
+        }
+        
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting document stats for bot {bot_id}: {e}")
-        raise
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve document statistics"
+        )

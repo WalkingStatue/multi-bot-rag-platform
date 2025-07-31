@@ -92,7 +92,7 @@ class OpenAIProvider(BaseLLMProvider):
             )
     
     def get_available_models(self) -> List[str]:
-        """Get list of available OpenAI models."""
+        """Get list of available OpenAI models (static fallback)."""
         return [
             "gpt-4",
             "gpt-4-turbo",
@@ -104,3 +104,26 @@ class OpenAIProvider(BaseLLMProvider):
             "gpt-3.5-turbo-1106",
             "gpt-3.5-turbo-0125"
         ]
+    
+    async def _fetch_models_from_api(self, api_key: str) -> List[str]:
+        """Fetch available models from OpenAI API."""
+        url = f"{self.base_url}/models"
+        headers = self.get_headers(api_key)
+        
+        response = await self.client.get(url, headers=headers)
+        response.raise_for_status()
+        
+        data = response.json()
+        models = []
+        
+        # Filter for chat completion models only
+        for model in data.get("data", []):
+            model_id = model.get("id", "")
+            # Include GPT models that support chat completions
+            if any(prefix in model_id for prefix in ["gpt-4", "gpt-3.5-turbo"]):
+                models.append(model_id)
+        
+        # Sort models with GPT-4 first, then GPT-3.5
+        models.sort(key=lambda x: (not x.startswith("gpt-4"), x))
+        
+        return models if models else self.get_available_models()

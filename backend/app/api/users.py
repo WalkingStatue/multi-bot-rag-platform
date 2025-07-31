@@ -1,6 +1,7 @@
 """
 User management API endpoints.
 """
+import logging
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -15,8 +16,10 @@ from ..schemas.user import (
 from ..services.user_service import UserService
 from ..services.auth_service import AuthService
 from ..services.llm_service import LLMProviderService
+from ..services.embedding_service import EmbeddingProviderService
 from ..models.user import User
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/users", tags=["users"])
 
 
@@ -233,7 +236,7 @@ async def get_supported_providers(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Get list of supported LLM providers.
+    Get list of supported LLM providers with static model lists.
     
     Args:
         current_user: Current authenticated user
@@ -243,13 +246,13 @@ async def get_supported_providers(
     """
     llm_service = LLMProviderService()
     try:
-        providers = await llm_service.get_supported_providers()
+        providers = llm_service.get_supported_providers()
         provider_info = {}
         
         for provider in providers:
             provider_info[provider] = {
                 "name": provider,
-                "models": await llm_service.get_available_models(provider)
+                "models": llm_service.get_available_models(provider)
             }
         
         return {
@@ -258,6 +261,176 @@ async def get_supported_providers(
         }
     finally:
         await llm_service.close()
+
+
+@router.get("/api-keys/providers/{provider}/models", status_code=status.HTTP_200_OK)
+async def get_provider_models_dynamic(
+    provider: str,
+    current_user: User = Depends(get_current_active_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    Get list of available models for a specific provider using user's API key.
+    
+    Args:
+        provider: Provider name (openai, anthropic, gemini, openrouter)
+        current_user: Current authenticated user
+        user_service: User service dependency
+        
+    Returns:
+        List of available models from the provider API
+    """
+    # Get user's API key for this provider
+    api_key = user_service.get_user_api_key(current_user.id, provider)
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No API key configured for provider '{provider}'. Please add your API key first."
+        )
+    
+    llm_service = LLMProviderService()
+    try:
+        models = await llm_service.get_available_models_dynamic(provider, api_key)
+        return {
+            "provider": provider,
+            "models": models,
+            "total": len(models),
+            "source": "api"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to fetch models for {provider}: {e}")
+        # Fall back to static models
+        static_models = llm_service.get_available_models(provider)
+        return {
+            "provider": provider,
+            "models": static_models,
+            "total": len(static_models),
+            "source": "static"
+        }
+    finally:
+        await llm_service.close()
+
+
+# Embedding Provider Endpoints
+
+@router.get("/embedding-providers", status_code=status.HTTP_200_OK)
+async def get_supported_embedding_providers(
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get list of supported embedding providers with static model lists.
+    
+    Args:
+        current_user: Current authenticated user
+        
+    Returns:
+        List of supported embedding providers with their available models
+    """
+    embedding_service = EmbeddingProviderService()
+    try:
+        providers = embedding_service.get_supported_providers()
+        provider_info = {}
+        
+        for provider in providers:
+            provider_info[provider] = {
+                "name": provider,
+                "models": embedding_service.get_available_models(provider),
+                "requires_api_key": True  # All embedding providers require API keys now
+            }
+        
+        return {
+            "providers": provider_info,
+            "total": len(providers)
+        }
+    finally:
+        await embedding_service.close()
+
+
+@router.get("/embedding-providers/{provider}/models", status_code=status.HTTP_200_OK)
+async def get_embedding_provider_models_dynamic(
+    provider: str,
+    current_user: User = Depends(get_current_active_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    Get list of available embedding models for a specific provider using user's API key.
+    
+    Args:
+        provider: Provider name (openai, gemini, anthropic)
+        current_user: Current authenticated user
+        user_service: User service dependency
+        
+    Returns:
+        List of available embedding models from the provider API
+    """
+    # Get user's API key for this provider
+    api_key = user_service.get_user_api_key(current_user.id, provider)
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No API key configured for provider '{provider}'. Please add your API key first."
+        )
+    
+    embedding_service = EmbeddingProviderService()
+    try:
+        models = await embedding_service.get_available_models_dynamic(provider, api_key)
+        return {
+            "provider": provider,
+            "models": models,
+            "total": len(models),
+            "source": "api"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to fetch embedding models for {provider}: {e}")
+        # Fall back to static models
+        static_models = embedding_service.get_available_models(provider)
+        return {
+            "provider": provider,
+            "models": static_models,
+            "total": len(static_models),
+            "source": "static"
+        }
+    finally:
+        await embedding_service.close()
+
+
+@router.post("/embedding-providers/{provider}/validate", status_code=status.HTTP_200_OK)
+async def validate_embedding_api_key(
+    provider: str,
+    api_key_data: APIKeyCreate,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Validate API key for a specific embedding provider.
+    
+    Args:
+        provider: Provider name (openai, gemini, anthropic)
+        api_key_data: API key data to validate
+        current_user: Current authenticated user
+        
+    Returns:
+        Validation result
+    """
+    if provider != api_key_data.provider:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provider in URL must match provider in request body"
+        )
+    
+    embedding_service = EmbeddingProviderService()
+    try:
+        is_valid = await embedding_service.validate_api_key(provider, api_key_data.api_key)
+        return {
+            "valid": is_valid,
+            "provider": provider,
+            "message": "API key is valid" if is_valid else "API key is invalid"
+        }
+    finally:
+        await embedding_service.close()
 
 
 # User Settings Endpoints

@@ -2,11 +2,11 @@
  * Unit tests for BotManagement component
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BotManagement } from '../../components/bots/BotManagement';
 import { botService } from '../../services/botService';
-import { BotWithRole, BotFormData } from '../../types/bot';
+import { BotWithRole } from '../../types/bot';
 
 // Mock the bot service
 vi.mock('../../services/botService');

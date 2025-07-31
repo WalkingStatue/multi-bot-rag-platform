@@ -123,7 +123,7 @@ class LLMClientFactory:
     
     def get_available_models(self, provider_name: str) -> list[str]:
         """
-        Get available models for a specific provider.
+        Get available models for a specific provider (static fallback).
         
         Args:
             provider_name: Name of the provider
@@ -136,6 +136,23 @@ class LLMClientFactory:
         """
         provider = self.get_provider(provider_name)
         return provider.get_available_models()
+    
+    async def get_available_models_dynamic(self, provider_name: str, api_key: str) -> list[str]:
+        """
+        Get available models for a specific provider dynamically from API.
+        
+        Args:
+            provider_name: Name of the provider
+            api_key: API key for the provider
+            
+        Returns:
+            List of available model names
+            
+        Raises:
+            HTTPException: If provider is not supported
+        """
+        provider = self.get_provider(provider_name)
+        return await provider.get_available_models_dynamic(api_key)
     
     def get_all_available_models(self) -> Dict[str, list[str]]:
         """

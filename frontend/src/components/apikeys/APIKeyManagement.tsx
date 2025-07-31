@@ -36,13 +36,21 @@ export const APIKeyManagement: React.FC = () => {
       setLoading({ list: true, providers: true, action: false });
       setError(null);
 
-      const [apiKeysData, providersData] = await Promise.all([
+      const [apiKeysData, llmProvidersData, embeddingProvidersData] = await Promise.all([
         apiKeyService.getAPIKeys(),
         apiKeyService.getSupportedProviders(),
+        apiKeyService.getSupportedEmbeddingProviders(),
       ]);
 
       setApiKeys(apiKeysData);
-      setProviders(providersData.providers);
+      
+      // Combine LLM and embedding providers
+      const combinedProviders = {
+        ...llmProvidersData.providers,
+        ...embeddingProvidersData.providers
+      };
+      
+      setProviders(combinedProviders);
     } catch (err) {
       setError('Failed to load API keys and providers');
       console.error('Error loading data:', err);

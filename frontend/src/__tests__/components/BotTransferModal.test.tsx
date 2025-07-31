@@ -2,7 +2,7 @@
  * Unit tests for BotTransferModal component
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BotTransferModal } from '../../components/bots/BotTransferModal';
 import { botService } from '../../services/botService';
@@ -608,7 +608,7 @@ describe('BotTransferModal', () => {
       // Focus should remain within modal
       const focusedElement = document.activeElement;
       const modal = screen.getByRole('dialog', { hidden: true });
-      expect(modal).toContainElement(focusedElement);
+      expect(modal).toContainElement(focusedElement as HTMLElement);
     });
   });
 });

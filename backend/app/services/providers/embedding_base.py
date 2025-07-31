@@ -62,12 +62,25 @@ class BaseEmbeddingProvider(ABC):
     @abstractmethod
     def get_available_models(self) -> List[str]:
         """
-        Get list of available models for this provider.
+        Get list of available models for this provider (static fallback).
         
         Returns:
             List of available model names
         """
         pass
+    
+    async def get_available_models_dynamic(self, api_key: str) -> List[str]:
+        """
+        Get list of available models for this provider from API (optional override).
+        
+        Args:
+            api_key: API key for the provider
+            
+        Returns:
+            List of available model names
+        """
+        # Default implementation returns static models
+        return self.get_available_models()
     
     @abstractmethod
     def get_embedding_dimension(self, model: str) -> int:

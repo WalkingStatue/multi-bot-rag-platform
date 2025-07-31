@@ -9,6 +9,7 @@ from fastapi import HTTPException, status
 from .providers.embedding_base import BaseEmbeddingProvider
 from .providers.openai_embedding_provider import OpenAIEmbeddingProvider
 from .providers.gemini_embedding_provider import GeminiEmbeddingProvider
+from .providers.anthropic_embedding_provider import AnthropicEmbeddingProvider
 
 
 logger = logging.getLogger(__name__)
@@ -32,7 +33,8 @@ class EmbeddingClientFactory:
         """Initialize all supported embedding providers."""
         self._providers = {
             "openai": OpenAIEmbeddingProvider(self.client),
-            "gemini": GeminiEmbeddingProvider(self.client)
+            "gemini": GeminiEmbeddingProvider(self.client),
+            "anthropic": AnthropicEmbeddingProvider(self.client)
         }
     
     def get_provider(self, provider_name: str) -> BaseEmbeddingProvider:
@@ -121,7 +123,7 @@ class EmbeddingClientFactory:
     
     def get_available_models(self, provider_name: str) -> List[str]:
         """
-        Get available models for a specific provider.
+        Get available models for a specific provider (static fallback).
         
         Args:
             provider_name: Name of the provider
@@ -134,6 +136,23 @@ class EmbeddingClientFactory:
         """
         provider = self.get_provider(provider_name)
         return provider.get_available_models()
+    
+    async def get_available_models_dynamic(self, provider_name: str, api_key: str) -> List[str]:
+        """
+        Get available models for a specific provider from API.
+        
+        Args:
+            provider_name: Name of the provider
+            api_key: API key for the provider
+            
+        Returns:
+            List of available model names
+            
+        Raises:
+            HTTPException: If provider is not supported
+        """
+        provider = self.get_provider(provider_name)
+        return await provider.get_available_models_dynamic(api_key)
     
     def get_all_available_models(self) -> Dict[str, List[str]]:
         """

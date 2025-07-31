@@ -48,18 +48,31 @@ class DocumentService:
         self.db = db
         self.permission_service = permission_service or PermissionService(db)
         self.embedding_service = embedding_service or EmbeddingProviderService()
-        self.vector_service = vector_service or VectorService()
+        
+        # Temporarily disable vector service to isolate the issue
+        self.vector_service = None
+        logger.info("Vector service disabled for debugging")
         
         # Initialize document processor with configurable settings
-        self.processor = DocumentProcessor(
-            chunk_size=getattr(settings, 'chunk_size', 1000),
-            chunk_overlap=getattr(settings, 'chunk_overlap', 200),
-            max_file_size=getattr(settings, 'max_file_size', 50 * 1024 * 1024)
-        )
+        try:
+            self.processor = DocumentProcessor(
+                chunk_size=getattr(settings, 'chunk_size', 1000),
+                chunk_overlap=getattr(settings, 'chunk_overlap', 200),
+                max_file_size=getattr(settings, 'max_file_size', 50 * 1024 * 1024)
+            )
+            logger.info("DocumentProcessor initialized successfully")
+        except Exception as e:
+            logger.error(f"Failed to initialize DocumentProcessor: {e}")
+            self.processor = None
         
         # Ensure upload directory exists
-        self.upload_dir = Path(getattr(settings, 'upload_dir', './uploads'))
-        self.upload_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            self.upload_dir = Path(getattr(settings, 'upload_dir', './uploads'))
+            self.upload_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Upload directory created: {self.upload_dir}")
+        except Exception as e:
+            logger.error(f"Failed to create upload directory: {e}")
+            self.upload_dir = Path('./uploads')
     
     async def upload_document(
         self,
@@ -85,7 +98,7 @@ class DocumentService:
         """
         # Check permissions - user must be editor or higher
         if not self.permission_service.check_bot_permission(
-            user_id, bot_id, "editor"
+            user_id, bot_id, "upload_documents"
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -176,7 +189,7 @@ class DocumentService:
         
         # Check permissions
         if not self.permission_service.check_bot_permission(
-            user_id, document.bot_id, "editor"
+            user_id, document.bot_id, "upload_documents"
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -215,8 +228,9 @@ class DocumentService:
             chunk_texts = [chunk.content for chunk in chunks]
             
             # Get user's API key for the embedding provider
-            # TODO: Implement API key retrieval from user service
-            api_key = None  # For now, will work with local provider
+            from ..services.user_service import UserService
+            user_service = UserService(self.db)
+            api_key = user_service.get_user_api_key(document.uploaded_by, embedding_provider)
             
             embeddings = await self.embedding_service.generate_embeddings(
                 provider=embedding_provider,
@@ -258,6 +272,17 @@ class DocumentService:
                     chunk_metadata=chunk.metadata
                 )
                 db_chunks.append(db_chunk)
+            
+            # Ensure vector collection exists for this bot
+            if self.vector_service and vector_chunks:
+                # Get embedding dimension from the first embedding
+                embedding_dimension = len(embeddings[0]) if embeddings else 768
+                
+                # Initialize collection if it doesn't exist
+                await self.vector_service.initialize_bot_collection(
+                    str(document.bot_id), 
+                    embedding_dimension
+                )
             
             # Store embeddings in vector store
             stored_ids = await self.vector_service.store_document_chunks(
@@ -322,8 +347,8 @@ class DocumentService:
             )
         
         # Check permissions - user must be admin or higher
-        if not await self.permission_service.check_bot_permission(
-            user_id, document.bot_id, "admin"
+        if not self.permission_service.check_bot_permission(
+            user_id, document.bot_id, "delete_documents"
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -388,7 +413,7 @@ class DocumentService:
         """
         # Check permissions - user must be viewer or higher
         if not self.permission_service.check_bot_permission(
-            user_id, bot_id, "viewer"
+            user_id, bot_id, "view_documents"
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -451,7 +476,7 @@ class DocumentService:
         
         # Check permissions
         if not self.permission_service.check_bot_permission(
-            user_id, document.bot_id, "viewer"
+            user_id, document.bot_id, "view_documents"
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -524,7 +549,7 @@ class DocumentService:
         """
         # Check permissions
         if not self.permission_service.check_bot_permission(
-            user_id, bot_id, "viewer"
+            user_id, bot_id, "view_documents"
         ):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -541,8 +566,9 @@ class DocumentService:
                 )
             
             # Generate query embedding
-            # TODO: Get user's API key for the embedding provider
-            api_key = None  # For now, will work with local provider
+            from ..services.user_service import UserService
+            user_service = UserService(self.db)
+            api_key = user_service.get_user_api_key(user_id, bot.embedding_provider)
             
             query_embeddings = await self.embedding_service.generate_embeddings(
                 provider=bot.embedding_provider,
@@ -604,18 +630,32 @@ class DocumentService:
         Raises:
             HTTPException: If permission denied
         """
+        logger.info(f"Getting document stats for bot {bot_id}, user {user_id}")
+        
         # Check permissions
-        if not self.permission_service.check_bot_permission(
-            user_id, bot_id, "viewer"
-        ):
+        try:
+            has_permission = self.permission_service.check_bot_permission(
+                user_id, bot_id, "view_documents"
+            )
+            logger.info(f"Permission check result: {has_permission}")
+            
+            if not has_permission:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Insufficient permissions to view document statistics"
+                )
+        except Exception as e:
+            logger.error(f"Permission check failed: {e}")
             raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions to view document statistics"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Permission check failed: {str(e)}"
             )
         
         try:
+            logger.info("Querying documents from database")
             # Get document counts and sizes
             documents = self.db.query(Document).filter(Document.bot_id == bot_id).all()
+            logger.info(f"Found {len(documents)} documents")
             
             total_documents = len(documents)
             total_size = sum(doc.file_size or 0 for doc in documents)
@@ -627,25 +667,25 @@ class DocumentService:
                 mime_type = doc.mime_type or "unknown"
                 mime_types[mime_type] = mime_types.get(mime_type, 0) + 1
             
-            # Get vector store stats
-            try:
-                vector_stats = await self.vector_service.get_bot_collection_stats(str(bot_id))
-            except:
-                vector_stats = {"error": "Unable to retrieve vector store statistics"}
+            logger.info(f"Basic stats calculated: docs={total_documents}, size={total_size}, chunks={total_chunks}")
             
+            # Simple stats without vector store
             stats = {
                 "total_documents": total_documents,
                 "total_file_size": total_size,
                 "total_chunks": total_chunks,
                 "average_chunks_per_document": total_chunks / total_documents if total_documents > 0 else 0,
                 "file_type_distribution": mime_types,
-                "vector_store_stats": vector_stats
+                "vector_store_stats": {"status": "disabled_for_debugging"}
             }
             
+            logger.info(f"Returning stats: {stats}")
             return stats
             
         except Exception as e:
             logger.error(f"Error getting document stats for bot {bot_id}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to get document statistics: {str(e)}"

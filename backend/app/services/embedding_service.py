@@ -94,7 +94,7 @@ class EmbeddingProviderService:
     
     def get_available_models(self, provider: str) -> List[str]:
         """
-        Get list of available models for a provider.
+        Get list of available models for a provider (static fallback).
         
         Args:
             provider: Provider name
@@ -109,6 +109,26 @@ class EmbeddingProviderService:
         except Exception as e:
             logger.error(f"Failed to get models for {provider}: {e}")
             return []
+    
+    async def get_available_models_dynamic(self, provider: str, api_key: str) -> List[str]:
+        """
+        Get list of available models for a provider dynamically from API.
+        
+        Args:
+            provider: Provider name
+            api_key: API key for the provider
+            
+        Returns:
+            List of available model names
+        """
+        try:
+            return await self.factory.get_available_models_dynamic(provider, api_key)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to get dynamic models for {provider}: {e}")
+            # Fall back to static models
+            return self.get_available_models(provider)
     
     def get_all_available_models(self) -> Dict[str, List[str]]:
         """
@@ -318,12 +338,12 @@ class EmbeddingProviderService:
     
     async def get_fallback_provider(self) -> Tuple[str, str]:
         """
-        Get the fallback provider and model (Gemini provider).
+        Get the fallback provider and model (OpenAI provider).
         
         Returns:
             Tuple of (provider_name, model_name)
         """
-        fallback_provider = "gemini"
+        fallback_provider = "openai"
         fallback_models = self.get_available_models(fallback_provider)
         
         if not fallback_models:
@@ -344,10 +364,10 @@ class EmbeddingProviderService:
         model: str,
         api_key: Optional[str] = None,
         config: Optional[Dict[str, Any]] = None,
-        use_fallback: bool = True
+        use_fallback: bool = False
     ) -> Tuple[List[List[float]], str, str]:
         """
-        Generate embeddings with automatic fallback to local provider on failure.
+        Generate embeddings with optional fallback (fallback disabled by default).
         
         Args:
             primary_provider: Primary provider to try first
@@ -355,13 +375,13 @@ class EmbeddingProviderService:
             model: Model name for primary provider
             api_key: API key for primary provider
             config: Optional configuration parameters
-            use_fallback: Whether to use fallback on failure
+            use_fallback: Whether to use fallback on failure (disabled by default)
             
         Returns:
             Tuple of (embeddings, used_provider, used_model)
             
         Raises:
-            HTTPException: If both primary and fallback providers fail
+            HTTPException: If primary provider fails and fallback is disabled or also fails
         """
         try:
             # Try primary provider first
@@ -374,15 +394,19 @@ class EmbeddingProviderService:
             logger.warning(f"Primary provider {primary_provider} failed: {e}")
             
             if not use_fallback:
-                raise
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Embedding generation failed for {primary_provider}: {str(e)}"
+                )
             
             try:
-                # Fall back to local provider
+                # Fall back to OpenAI provider (requires user's API key)
                 fallback_provider, fallback_model = await self.get_fallback_provider()
                 logger.info(f"Falling back to {fallback_provider} with model {fallback_model}")
                 
+                # Note: This would require the user to have an API key for the fallback provider
                 embeddings = await self.generate_embeddings(
-                    fallback_provider, texts, fallback_model
+                    fallback_provider, texts, fallback_model, api_key
                 )
                 return embeddings, fallback_provider, fallback_model
                 

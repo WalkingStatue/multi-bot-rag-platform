@@ -7,7 +7,7 @@ import { XMarkIcon } from '@heroicons/react/24/outline';
 interface AlertProps {
   type?: 'success' | 'error' | 'warning' | 'info';
   title?: string;
-  message: string;
+  message: React.ReactNode;
   onClose?: () => void;
   className?: string;
 }
@@ -68,7 +68,7 @@ export const Alert: React.FC<AlertProps> = ({
           {title && (
             <h3 className="text-sm font-medium mb-1">{title}</h3>
           )}
-          <p className="text-sm">{message}</p>
+          <div className="text-sm">{message}</div>
         </div>
         {onClose && (
           <div className="ml-auto pl-3">

@@ -62,12 +62,44 @@ class BaseLLMProvider(ABC):
     @abstractmethod
     def get_available_models(self) -> List[str]:
         """
-        Get list of available models for this provider.
+        Get list of available models for this provider (static fallback).
         
         Returns:
             List of available model names
         """
         pass
+    
+    async def get_available_models_dynamic(self, api_key: str) -> List[str]:
+        """
+        Get list of available models dynamically from the provider API.
+        Falls back to static list if API call fails.
+        
+        Args:
+            api_key: API key for the provider
+            
+        Returns:
+            List of available model names
+        """
+        try:
+            return await self._fetch_models_from_api(api_key)
+        except Exception:
+            # Fall back to static list if dynamic fetch fails
+            return self.get_available_models()
+    
+    async def _fetch_models_from_api(self, api_key: str) -> List[str]:
+        """
+        Fetch models from the provider API. Override in subclasses.
+        
+        Args:
+            api_key: API key for the provider
+            
+        Returns:
+            List of available model names
+            
+        Raises:
+            NotImplementedError: If not implemented in subclass
+        """
+        raise NotImplementedError("Subclasses should implement _fetch_models_from_api")
     
     def get_headers(self, api_key: str) -> Dict[str, str]:
         """

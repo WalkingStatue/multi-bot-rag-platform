@@ -139,7 +139,7 @@ class GeminiProvider(BaseLLMProvider):
             )
     
     def get_available_models(self) -> List[str]:
-        """Get list of available Gemini models."""
+        """Get list of available Gemini models (static fallback)."""
         return [
             "gemini-pro",
             "gemini-pro-vision",
@@ -147,3 +147,31 @@ class GeminiProvider(BaseLLMProvider):
             "gemini-1.5-flash",
             "gemini-1.0-pro"
         ]
+    
+    async def _fetch_models_from_api(self, api_key: str) -> List[str]:
+        """Fetch available models from Gemini API."""
+        url = f"{self.base_url}/models?key={api_key}"
+        headers = self.get_headers(api_key)
+        
+        response = await self.client.get(url, headers=headers)
+        response.raise_for_status()
+        
+        data = response.json()
+        models = []
+        
+        # Extract model names from the response
+        for model in data.get("models", []):
+            model_name = model.get("name", "")
+            # Remove the "models/" prefix if present
+            if model_name.startswith("models/"):
+                model_name = model_name[7:]
+            
+            # Filter for text generation models only
+            supported_methods = model.get("supportedGenerationMethods", [])
+            if "generateContent" in supported_methods:
+                models.append(model_name)
+        
+        # Sort models with newer versions first
+        models.sort(key=lambda x: (not x.startswith("gemini-1.5"), not x.startswith("gemini-pro"), x))
+        
+        return models if models else self.get_available_models()

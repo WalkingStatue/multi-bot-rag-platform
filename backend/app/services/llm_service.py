@@ -93,7 +93,7 @@ class LLMProviderService:
     
     def get_available_models(self, provider: str) -> List[str]:
         """
-        Get list of available models for a provider.
+        Get list of available models for a provider (static fallback).
         
         Args:
             provider: Provider name
@@ -108,6 +108,26 @@ class LLMProviderService:
         except Exception as e:
             logger.error(f"Failed to get models for {provider}: {e}")
             return []
+    
+    async def get_available_models_dynamic(self, provider: str, api_key: str) -> List[str]:
+        """
+        Get list of available models for a provider dynamically from API.
+        
+        Args:
+            provider: Provider name
+            api_key: API key for the provider
+            
+        Returns:
+            List of available model names
+        """
+        try:
+            return await self.factory.get_available_models_dynamic(provider, api_key)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to get dynamic models for {provider}: {e}")
+            # Fall back to static models
+            return self.get_available_models(provider)
     
     def get_all_available_models(self) -> Dict[str, List[str]]:
         """

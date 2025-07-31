@@ -2,6 +2,7 @@
  * Main bot management component with backend integration
  */
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BotList } from './BotList';
 import { BotForm } from './BotForm';
 import { BotTransferModal } from './BotTransferModal';
@@ -16,6 +17,7 @@ interface Message {
 }
 
 export const BotManagement: React.FC = () => {
+  const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [bots, setBots] = useState<BotWithRole[]>([]);
   const [editingBot, setEditingBot] = useState<BotWithRole | null>(null);
@@ -142,6 +144,10 @@ export const BotManagement: React.FC = () => {
     setFilters(newFilters);
   };
 
+  const handleManageCollaboration = (bot: BotWithRole) => {
+    navigate(`/bots/${bot.bot.id}/collaboration`);
+  };
+
   const filteredBots = React.useMemo(() => {
     let filtered = [...bots];
 
@@ -265,6 +271,7 @@ export const BotManagement: React.FC = () => {
           onEditBot={handleEditBot}
           onDeleteBot={handleDeleteBot}
           onTransferOwnership={handleTransferOwnership}
+          onManageCollaboration={handleManageCollaboration}
         />
       ) : (
         <BotForm

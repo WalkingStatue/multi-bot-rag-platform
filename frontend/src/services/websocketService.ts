@@ -2,7 +2,7 @@
  * WebSocket service for real-time updates
  */
 import { io, Socket } from 'socket.io-client';
-import { WebSocketMessage, Notification } from '../types/notifications';
+import { Notification } from '../types/notifications';
 
 export class WebSocketService {
   private socket: Socket | null = null;
@@ -19,7 +19,7 @@ export class WebSocketService {
       return;
     }
 
-    const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
+    const wsUrl = (import.meta as any).env?.VITE_WS_URL || 'ws://localhost:8000';
     
     this.socket = io(wsUrl, {
       auth: {

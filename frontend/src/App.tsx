@@ -9,6 +9,9 @@ import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { CollaborationPage } from './pages/CollaborationPage';
+import DocumentManagementPage from './pages/DocumentManagementPage';
+import { ChatPage } from './pages/ChatPage';
 
 function App() {
   return (
@@ -24,6 +27,9 @@ function App() {
           {/* Protected routes */}
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/bots/:botId/collaboration" element={<CollaborationPage />} />
+          <Route path="/bots/:botId/documents" element={<DocumentManagementPage />} />
+          <Route path="/bots/:botId/chat" element={<ChatPage />} />
           
           {/* Default redirect */}
           <Route path="/" element={<Navigate to="/dashboard" replace />} />

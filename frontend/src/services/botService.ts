@@ -98,98 +98,150 @@ export class BotService {
   }
 
   /**
-   * Get available provider configurations
+   * Get available provider configurations with dynamic model fetching
    */
   async getProviderSettings(): Promise<BotProviderSettings> {
-    // This would typically come from a dedicated endpoint
-    // For now, we'll return a static configuration
-    return {
-      llm_providers: {
-        openai: {
-          name: 'openai',
-          display_name: 'OpenAI',
-          models: [
-            { id: 'gpt-3.5-turbo', name: 'GPT-3.5 Turbo', max_tokens: 4096 },
-            { id: 'gpt-4', name: 'GPT-4', max_tokens: 8192 },
-            { id: 'gpt-4-turbo', name: 'GPT-4 Turbo', max_tokens: 128000 },
-          ],
-          default_model: 'gpt-3.5-turbo',
-          supports_embeddings: true,
-          embedding_models: [
-            { id: 'text-embedding-3-small', name: 'Text Embedding 3 Small' },
-            { id: 'text-embedding-3-large', name: 'Text Embedding 3 Large' },
-          ],
-          default_embedding_model: 'text-embedding-3-small',
-        },
-        anthropic: {
-          name: 'anthropic',
-          display_name: 'Anthropic',
-          models: [
-            { id: 'claude-3-haiku', name: 'Claude 3 Haiku', max_tokens: 4096 },
-            { id: 'claude-3-sonnet', name: 'Claude 3 Sonnet', max_tokens: 4096 },
-            { id: 'claude-3-opus', name: 'Claude 3 Opus', max_tokens: 4096 },
-          ],
-          default_model: 'claude-3-haiku',
-          supports_embeddings: false,
-        },
-        gemini: {
-          name: 'gemini',
-          display_name: 'Google Gemini',
-          models: [
-            { id: 'gemini-pro', name: 'Gemini Pro', max_tokens: 8192 },
-            { id: 'gemini-pro-vision', name: 'Gemini Pro Vision', max_tokens: 8192 },
-          ],
-          default_model: 'gemini-pro',
-          supports_embeddings: true,
-          embedding_models: [
-            { id: 'embedding-001', name: 'Embedding 001' },
-          ],
-          default_embedding_model: 'embedding-001',
-        },
-        openrouter: {
-          name: 'openrouter',
-          display_name: 'OpenRouter',
-          models: [
-            { id: 'openrouter/auto', name: 'Auto (Best Available)' },
-            { id: 'anthropic/claude-3-opus', name: 'Claude 3 Opus' },
-            { id: 'openai/gpt-4-turbo', name: 'GPT-4 Turbo' },
-          ],
-          default_model: 'openrouter/auto',
-          supports_embeddings: false,
-        },
-      },
-      embedding_providers: {
-        openai: {
-          name: 'openai',
-          display_name: 'OpenAI',
-          models: [
-            { id: 'text-embedding-3-small', name: 'Text Embedding 3 Small' },
-            { id: 'text-embedding-3-large', name: 'Text Embedding 3 Large' },
-          ],
-          default_model: 'text-embedding-3-small',
-          supports_embeddings: true,
-        },
-        gemini: {
-          name: 'gemini',
-          display_name: 'Google Gemini',
-          models: [
-            { id: 'embedding-001', name: 'Embedding 001' },
-          ],
-          default_model: 'embedding-001',
-          supports_embeddings: true,
-        },
-        local: {
-          name: 'local',
-          display_name: 'Local Models',
-          models: [
-            { id: 'sentence-transformers/all-MiniLM-L6-v2', name: 'All-MiniLM-L6-v2' },
-            { id: 'sentence-transformers/all-mpnet-base-v2', name: 'All-MPNet-Base-v2' },
-          ],
-          default_model: 'sentence-transformers/all-MiniLM-L6-v2',
-          supports_embeddings: true,
-        },
-      },
+    const { apiKeyService } = await import('./apiKeyService');
+    
+    // Get static provider info first
+    const staticProviders = await apiKeyService.getSupportedProviders();
+    
+    // Build provider settings with dynamic model fetching
+    const llmProviders: Record<string, any> = {};
+    const embeddingProviders: Record<string, any> = {};
+    
+    for (const [providerKey, providerInfo] of Object.entries(staticProviders.providers)) {
+      // Try to get dynamic models, fall back to static if needed
+      let models = providerInfo.models;
+      let modelsSource = 'static';
+      
+      try {
+        const dynamicModels = await apiKeyService.getProviderModels(providerKey);
+        models = dynamicModels.models;
+        modelsSource = dynamicModels.source;
+      } catch (error) {
+        // Use static models if dynamic fetch fails
+        console.warn(`Failed to fetch dynamic models for ${providerKey}, using static models`);
+      }
+      
+      // Convert model strings to model objects
+      const modelObjects = models.map(modelId => ({
+        id: modelId,
+        name: this.formatModelName(modelId),
+        max_tokens: this.getModelMaxTokens(modelId)
+      }));
+      
+      // Configure LLM providers
+      llmProviders[providerKey] = {
+        name: providerKey,
+        display_name: this.getProviderDisplayName(providerKey),
+        models: modelObjects,
+        default_model: models[0] || 'gpt-3.5-turbo',
+        supports_embeddings: this.providerSupportsEmbeddings(providerKey),
+        models_source: modelsSource
+      };
+      
+      // Configure embedding providers if supported
+      if (this.providerSupportsEmbeddings(providerKey)) {
+        const embeddingModels = this.getEmbeddingModels(providerKey);
+        embeddingProviders[providerKey] = {
+          name: providerKey,
+          display_name: this.getProviderDisplayName(providerKey),
+          models: embeddingModels,
+          default_model: embeddingModels[0]?.id || 'text-embedding-3-small',
+          supports_embeddings: true
+        };
+      }
+    }
+    
+    // Add local embedding provider
+    embeddingProviders.local = {
+      name: 'local',
+      display_name: 'Local Models',
+      models: [
+        { id: 'sentence-transformers/all-MiniLM-L6-v2', name: 'All-MiniLM-L6-v2' },
+        { id: 'sentence-transformers/all-mpnet-base-v2', name: 'All-MPNet-Base-v2' },
+      ],
+      default_model: 'sentence-transformers/all-MiniLM-L6-v2',
+      supports_embeddings: true
     };
+    
+    return {
+      llm_providers: llmProviders,
+      embedding_providers: embeddingProviders
+    };
+  }
+  
+  /**
+   * Get dynamic models for a specific provider
+   */
+  async getProviderModels(provider: string): Promise<string[]> {
+    const { apiKeyService } = await import('./apiKeyService');
+    
+    try {
+      const result = await apiKeyService.getProviderModels(provider);
+      return result.models;
+    } catch (error) {
+      // Fall back to static models
+      const staticProviders = await apiKeyService.getSupportedProviders();
+      return staticProviders.providers[provider]?.models || [];
+    }
+  }
+  
+  private formatModelName(modelId: string): string {
+    // Convert model IDs to human-readable names
+    const nameMap: Record<string, string> = {
+      'gpt-4': 'GPT-4',
+      'gpt-4-turbo': 'GPT-4 Turbo',
+      'gpt-3.5-turbo': 'GPT-3.5 Turbo',
+      'claude-3-opus-20240229': 'Claude 3 Opus',
+      'claude-3-sonnet-20240229': 'Claude 3 Sonnet',
+      'claude-3-haiku-20240307': 'Claude 3 Haiku',
+      'gemini-pro': 'Gemini Pro',
+      'gemini-1.5-pro': 'Gemini 1.5 Pro',
+      'gemini-1.5-flash': 'Gemini 1.5 Flash'
+    };
+    
+    return nameMap[modelId] || modelId.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  }
+  
+  private getModelMaxTokens(modelId: string): number {
+    // Return max tokens based on model
+    if (modelId.includes('gpt-4-turbo') || modelId.includes('gpt-4-0125')) return 128000;
+    if (modelId.includes('gpt-4')) return 8192;
+    if (modelId.includes('gpt-3.5-turbo-16k')) return 16384;
+    if (modelId.includes('gpt-3.5')) return 4096;
+    if (modelId.includes('claude')) return 4096;
+    if (modelId.includes('gemini')) return 8192;
+    return 4096; // Default
+  }
+  
+  private getProviderDisplayName(provider: string): string {
+    const displayNames: Record<string, string> = {
+      openai: 'OpenAI',
+      anthropic: 'Anthropic',
+      gemini: 'Google Gemini',
+      openrouter: 'OpenRouter'
+    };
+    return displayNames[provider] || provider;
+  }
+  
+  private providerSupportsEmbeddings(provider: string): boolean {
+    return ['openai', 'gemini'].includes(provider);
+  }
+  
+  private getEmbeddingModels(provider: string) {
+    const embeddingModels: Record<string, any[]> = {
+      openai: [
+        { id: 'text-embedding-3-small', name: 'Text Embedding 3 Small' },
+        { id: 'text-embedding-3-large', name: 'Text Embedding 3 Large' },
+        { id: 'text-embedding-ada-002', name: 'Text Embedding Ada 002' }
+      ],
+      gemini: [
+        { id: 'embedding-001', name: 'Embedding 001' }
+      ]
+    };
+    return embeddingModels[provider] || [];
   }
 
   // Collaboration methods

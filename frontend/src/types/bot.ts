@@ -11,7 +11,7 @@ export interface BotBase {
 export interface BotCreate extends BotBase {
   llm_provider: 'openai' | 'anthropic' | 'openrouter' | 'gemini';
   llm_model: string;
-  embedding_provider?: 'openai' | 'gemini' | 'local';
+  embedding_provider?: 'openai' | 'gemini' | 'anthropic';
   embedding_model?: string;
   temperature?: number;
   max_tokens?: number;
@@ -28,7 +28,7 @@ export interface BotUpdate {
   system_prompt?: string;
   llm_provider?: 'openai' | 'anthropic' | 'openrouter' | 'gemini';
   llm_model?: string;
-  embedding_provider?: 'openai' | 'gemini' | 'local';
+  embedding_provider?: 'openai' | 'gemini' | 'anthropic';
   embedding_model?: string;
   temperature?: number;
   max_tokens?: number;
@@ -90,6 +90,8 @@ export interface BotPermission {
   id: string;
   bot_id: string;
   user_id: string;
+  username?: string;
+  email?: string;
   role: 'owner' | 'admin' | 'editor' | 'viewer';
   granted_by?: string;
   granted_at: string;
@@ -112,6 +114,14 @@ export interface BulkPermissionUpdate {
   user_permissions: Array<{
     user_id: string;
     role: 'admin' | 'editor' | 'viewer';
+  }>;
+}
+
+export interface BulkUpdateResponse {
+  successful: BotPermission[];
+  failed: Array<{
+    user_id: string;
+    error: string;
   }>;
 }
 

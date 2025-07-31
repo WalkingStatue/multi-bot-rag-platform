@@ -98,7 +98,7 @@ class OpenRouterProvider(BaseLLMProvider):
             )
     
     def get_available_models(self) -> List[str]:
-        """Get list of available OpenRouter models."""
+        """Get list of available OpenRouter models (static fallback)."""
         return [
             "openai/gpt-4",
             "openai/gpt-4-turbo",
@@ -117,3 +117,33 @@ class OpenRouterProvider(BaseLLMProvider):
             "cohere/command",
             "cohere/command-light"
         ]
+    
+    async def _fetch_models_from_api(self, api_key: str) -> List[str]:
+        """Fetch available models from OpenRouter API."""
+        url = f"{self.base_url}/models"
+        headers = self.get_headers(api_key)
+        
+        response = await self.client.get(url, headers=headers)
+        response.raise_for_status()
+        
+        data = response.json()
+        models = []
+        
+        # Extract model IDs from the response
+        for model in data.get("data", []):
+            model_id = model.get("id", "")
+            if model_id:
+                models.append(model_id)
+        
+        # Sort models by popularity/preference
+        priority_prefixes = ["openai/gpt-4", "anthropic/claude-3", "openai/gpt-3.5", "anthropic/claude-2"]
+        
+        def sort_key(model):
+            for i, prefix in enumerate(priority_prefixes):
+                if model.startswith(prefix):
+                    return (i, model)
+            return (len(priority_prefixes), model)
+        
+        models.sort(key=sort_key)
+        
+        return models if models else self.get_available_models()
