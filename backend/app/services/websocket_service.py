@@ -263,13 +263,13 @@ class WebSocketService:
                 await websocket.close(code=4001, reason="Invalid token")
                 return None
             
-            user_id = payload.get("sub")
-            if not user_id:
+            username = payload.get("sub")
+            if not username:
                 await websocket.close(code=4001, reason="Invalid token payload")
                 return None
             
-            # Get user from database
-            user = self.db.query(User).filter(User.id == uuid.UUID(user_id)).first()
+            # Get user from database by username
+            user = self.db.query(User).filter(User.username == username).first()
             if not user or not user.is_active:
                 await websocket.close(code=4001, reason="User not found or inactive")
                 return None

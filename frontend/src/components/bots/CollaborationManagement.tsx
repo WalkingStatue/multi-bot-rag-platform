@@ -59,9 +59,6 @@ export const CollaborationManagement: React.FC<CollaborationManagementProps> = (
 
   // Setup WebSocket listeners for real-time updates
   useEffect(() => {
-    // Join bot room for real-time updates
-    websocketService.joinBotRoom(botId);
-
     // Subscribe to permission updates
     const unsubscribePermission = websocketService.subscribe('permission_update', (data) => {
       if (data.bot_id === botId) {
@@ -84,7 +81,6 @@ export const CollaborationManagement: React.FC<CollaborationManagementProps> = (
     });
 
     return () => {
-      websocketService.leaveBotRoom(botId);
       unsubscribePermission();
       unsubscribeCollaboration();
       unsubscribeActivity();
