@@ -55,9 +55,12 @@ class OpenRouterProvider(BaseLLMProvider):
         if config:
             default_config.update(config)
         
+        # Parse the prompt to extract conversation context if available
+        messages = self._parse_prompt_to_messages(prompt)
+        
         payload = {
             "model": model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
             "temperature": default_config.get("temperature", 0.7),
             "max_tokens": default_config.get("max_tokens", 1000),
             "top_p": default_config.get("top_p", 1.0)
@@ -97,11 +100,73 @@ class OpenRouterProvider(BaseLLMProvider):
                 detail=f"Failed to generate OpenRouter response: {str(e)}"
             )
     
+    def _parse_prompt_to_messages(self, prompt: str) -> List[Dict[str, str]]:
+        """Parse a formatted prompt into OpenRouter messages format."""
+        messages = []
+        
+        # Split prompt into sections
+        sections = prompt.split('\n\n')
+        current_content = []
+        
+        for section in sections:
+            if section.startswith('System:'):
+                if current_content:
+                    messages.append({"role": "user", "content": '\n\n'.join(current_content)})
+                    current_content = []
+                system_content = section[7:].strip()  # Remove 'System:' prefix
+                messages.append({"role": "system", "content": system_content})
+            elif section.startswith('Conversation History:'):
+                if current_content:
+                    messages.append({"role": "user", "content": '\n\n'.join(current_content)})
+                    current_content = []
+                # Parse conversation history
+                history_content = section[21:].strip()  # Remove 'Conversation History:' prefix
+                history_messages = self._parse_conversation_history(history_content)
+                messages.extend(history_messages)
+            elif section.startswith('User:'):
+                if current_content:
+                    messages.append({"role": "user", "content": '\n\n'.join(current_content)})
+                    current_content = []
+                user_content = section[5:].strip()  # Remove 'User:' prefix
+                messages.append({"role": "user", "content": user_content})
+            elif section.startswith('Assistant:'):
+                # This is just a prompt continuation, ignore
+                continue
+            else:
+                # Add to current content (context, etc.)
+                current_content.append(section)
+        
+        # Add any remaining content as user message
+        if current_content:
+            messages.append({"role": "user", "content": '\n\n'.join(current_content)})
+        
+        # Ensure we have at least one message
+        if not messages:
+            messages.append({"role": "user", "content": prompt})
+        
+        return messages
+    
+    def _parse_conversation_history(self, history_content: str) -> List[Dict[str, str]]:
+        """Parse conversation history into messages."""
+        messages = []
+        lines = history_content.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('User:'):
+                messages.append({"role": "user", "content": line[5:].strip()})
+            elif line.startswith('Assistant:'):
+                messages.append({"role": "assistant", "content": line[10:].strip()})
+        
+        return messages
+    
     def get_available_models(self) -> List[str]:
         """Get list of available OpenRouter models (static fallback)."""
         return [
-            "openai/gpt-4",
+            "openai/gpt-4o",
+            "openai/gpt-4o-mini",
             "openai/gpt-4-turbo",
+            "openai/gpt-4",
             "openai/gpt-3.5-turbo",
             "anthropic/claude-3-opus",
             "anthropic/claude-3-sonnet",
@@ -117,6 +182,40 @@ class OpenRouterProvider(BaseLLMProvider):
             "cohere/command",
             "cohere/command-light"
         ]
+    
+    def get_model_max_tokens(self, model: str) -> int:
+        """Get default max tokens for a specific model."""
+        model_limits = {
+            "openai/gpt-4o": 4096,
+            "openai/gpt-4o-mini": 16384,
+            "openai/gpt-4-turbo": 4096,
+            "openai/gpt-4": 8192,
+            "openai/gpt-3.5-turbo": 4096,
+            "anthropic/claude-3-opus": 4096,
+            "anthropic/claude-3-sonnet": 4096,
+            "anthropic/claude-3-haiku": 4096,
+            "anthropic/claude-2": 4096,
+            "anthropic/claude-instant-1": 4096,
+            "meta-llama/llama-2-70b-chat": 4096,
+            "meta-llama/llama-2-13b-chat": 4096,
+            "mistralai/mixtral-8x7b-instruct": 4096,
+            "mistralai/mistral-7b-instruct": 4096,
+            "google/gemini-pro": 2048,
+            "google/palm-2-chat-bison": 1024,
+            "cohere/command": 4096,
+            "cohere/command-light": 4096
+        }
+        return model_limits.get(model, 2048)  # Default to 2048 if model not found
+    
+    def get_default_config(self) -> Dict[str, Any]:
+        """Get default configuration for OpenRouter provider."""
+        return {
+            "temperature": 0.7,
+            "max_tokens": 2048,  # Will be overridden by model-specific value
+            "top_p": 1.0,
+            "frequency_penalty": 0.0,
+            "presence_penalty": 0.0
+        }
     
     async def _fetch_models_from_api(self, api_key: str) -> List[str]:
         """Fetch available models from OpenRouter API."""

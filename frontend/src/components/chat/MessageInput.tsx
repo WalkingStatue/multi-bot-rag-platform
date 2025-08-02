@@ -22,8 +22,12 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const { user } = useAuth();
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [lastSentTime, setLastSentTime] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<number | null>(null);
+  
+  // Minimum time between messages to prevent rate limiting (in milliseconds)
+  const MIN_MESSAGE_INTERVAL = 1000;
   
   const { addMessage, updateMessage, setTyping } = useChatStore();
 
@@ -60,9 +64,20 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     
     if (!message.trim() || isSending || !user) return;
 
+    // Check rate limiting
+    const now = Date.now();
+    const timeSinceLastMessage = now - lastSentTime;
+    if (timeSinceLastMessage < MIN_MESSAGE_INTERVAL) {
+      const waitTime = MIN_MESSAGE_INTERVAL - timeSinceLastMessage;
+      console.log(`Rate limiting: waiting ${waitTime}ms before sending`);
+      setTimeout(() => handleSubmit(e), waitTime);
+      return;
+    }
+
     const messageContent = message.trim();
     setMessage('');
     setIsSending(true);
+    setLastSentTime(now);
 
     // Stop typing indicator
     chatWebSocketService.sendTypingIndicator(false);
@@ -98,32 +113,27 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         tempId: undefined
       });
 
-      // Add assistant response
-      const assistantMessage: MessageWithStatus = {
-        id: response.metadata?.assistant_message_id || `assistant-${Date.now()}`,
-        session_id: response.session_id,
-        bot_id: botId,
-        user_id: user.id, // This will be overridden by the actual assistant user
-        role: 'assistant',
-        content: response.message,
-        message_metadata: {
-          ...response.metadata,
-          chunks_used: response.chunks_used,
-          processing_time: response.processing_time
-        },
-        created_at: new Date().toISOString(),
-        status: 'sent'
-      };
+      // Note: Assistant response will come through WebSocket, so we don't add it here
+      // The HTTP response might contain the assistant message, but we ignore it to prevent duplicates
 
-      addMessage(sessionId, assistantMessage);
-
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to send message:', error);
       
       // Update temp message to show error
       updateMessage(sessionId, tempId, {
         status: 'error'
       });
+
+      // Determine error message based on error type
+      let errorContent = 'Failed to send message. Please try again.';
+      
+      if (error.response?.status === 429) {
+        errorContent = 'Too many requests. Please wait a moment before sending another message.';
+      } else if (error.code === 'ECONNABORTED') {
+        errorContent = 'Request timed out. Please check your connection and try again.';
+      } else if (error.response?.status >= 500) {
+        errorContent = 'Server error. Please try again in a few moments.';
+      }
 
       // Show error message
       const errorMessage: MessageWithStatus = {
@@ -132,7 +142,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         bot_id: botId,
         user_id: 'system',
         role: 'system',
-        content: 'Failed to send message. Please try again.',
+        content: errorContent,
         created_at: new Date().toISOString(),
         status: 'sent'
       };

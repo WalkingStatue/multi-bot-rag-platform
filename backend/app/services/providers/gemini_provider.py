@@ -52,14 +52,21 @@ class GeminiProvider(BaseLLMProvider):
         if config:
             default_config.update(config)
         
+        # Parse the prompt to extract conversation context if available
+        system_instruction, contents = self._parse_prompt_to_contents(prompt)
+        
         payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
+            "contents": contents,
             "generationConfig": {
                 "temperature": default_config.get("temperature", 0.7),
                 "maxOutputTokens": default_config.get("max_tokens", 1000),
                 "topP": default_config.get("top_p", 1.0)
             }
         }
+        
+        # Add system instruction if present
+        if system_instruction:
+            payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
         
         # Add safety settings to prevent blocking
         payload["safetySettings"] = [
@@ -138,6 +145,66 @@ class GeminiProvider(BaseLLMProvider):
                 detail=f"Failed to generate Gemini response: {str(e)}"
             )
     
+    def _parse_prompt_to_contents(self, prompt: str) -> tuple[str, List[Dict[str, Any]]]:
+        """Parse a formatted prompt into Gemini contents format with system instruction."""
+        system_instruction = ""
+        contents = []
+        
+        # Split prompt into sections
+        sections = prompt.split('\n\n')
+        current_content = []
+        
+        for section in sections:
+            if section.startswith('System:'):
+                if current_content:
+                    contents.append({"role": "user", "parts": [{"text": '\n\n'.join(current_content)}]})
+                    current_content = []
+                system_instruction = section[7:].strip()  # Remove 'System:' prefix
+            elif section.startswith('Conversation History:'):
+                if current_content:
+                    contents.append({"role": "user", "parts": [{"text": '\n\n'.join(current_content)}]})
+                    current_content = []
+                # Parse conversation history
+                history_content = section[21:].strip()  # Remove 'Conversation History:' prefix
+                history_contents = self._parse_conversation_history(history_content)
+                contents.extend(history_contents)
+            elif section.startswith('User:'):
+                if current_content:
+                    contents.append({"role": "user", "parts": [{"text": '\n\n'.join(current_content)}]})
+                    current_content = []
+                user_content = section[5:].strip()  # Remove 'User:' prefix
+                contents.append({"role": "user", "parts": [{"text": user_content}]})
+            elif section.startswith('Assistant:'):
+                # This is just a prompt continuation, ignore
+                continue
+            else:
+                # Add to current content (context, etc.)
+                current_content.append(section)
+        
+        # Add any remaining content as user message
+        if current_content:
+            contents.append({"role": "user", "parts": [{"text": '\n\n'.join(current_content)}]})
+        
+        # Ensure we have at least one content
+        if not contents:
+            contents.append({"role": "user", "parts": [{"text": prompt}]})
+        
+        return system_instruction, contents
+    
+    def _parse_conversation_history(self, history_content: str) -> List[Dict[str, Any]]:
+        """Parse conversation history into Gemini contents."""
+        contents = []
+        lines = history_content.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('User:'):
+                contents.append({"role": "user", "parts": [{"text": line[5:].strip()}]})
+            elif line.startswith('Assistant:'):
+                contents.append({"role": "model", "parts": [{"text": line[10:].strip()}]})
+        
+        return contents
+    
     def get_available_models(self) -> List[str]:
         """Get list of available Gemini models (static fallback)."""
         return [
@@ -147,6 +214,25 @@ class GeminiProvider(BaseLLMProvider):
             "gemini-1.5-flash",
             "gemini-1.0-pro"
         ]
+    
+    def get_model_max_tokens(self, model: str) -> int:
+        """Get default max tokens for a specific model."""
+        model_limits = {
+            "gemini-pro": 2048,
+            "gemini-pro-vision": 2048,
+            "gemini-1.5-pro": 8192,
+            "gemini-1.5-flash": 8192,
+            "gemini-1.0-pro": 2048
+        }
+        return model_limits.get(model, 2048)  # Default to 2048 if model not found
+    
+    def get_default_config(self) -> Dict[str, Any]:
+        """Get default configuration for Gemini provider."""
+        return {
+            "temperature": 0.7,
+            "max_tokens": 2048,  # Will be overridden by model-specific value
+            "top_p": 1.0
+        }
     
     async def _fetch_models_from_api(self, api_key: str) -> List[str]:
         """Fetch available models from Gemini API."""

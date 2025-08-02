@@ -127,3 +127,16 @@ class BaseLLMProvider(ABC):
             "frequency_penalty": 0.0,
             "presence_penalty": 0.0
         }
+    
+    def get_model_max_tokens(self, model: str) -> int:
+        """
+        Get default max tokens for a specific model.
+        Override in subclasses for model-specific limits.
+        
+        Args:
+            model: Model name
+            
+        Returns:
+            Default max tokens for the model
+        """
+        return 1000  # Default fallback

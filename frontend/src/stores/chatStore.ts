@@ -97,6 +97,30 @@ export const useChatStore = create<ChatStore>()(
       
       addMessage: (sessionId, message) => set((state) => {
         const sessionMessages = state.messages[sessionId] || [];
+        
+        // Check if message already exists to prevent duplicates
+        const messageExists = sessionMessages.some(msg => {
+          // Check by ID first
+          if (msg.id && message.id && msg.id === message.id) {
+            return true;
+          }
+          // Check by tempId
+          if (msg.tempId && message.tempId && msg.tempId === message.tempId) {
+            return true;
+          }
+          // Check by content and timestamp for messages without IDs (fallback)
+          if (!msg.id && !message.id && !msg.tempId && !message.tempId) {
+            return msg.content === message.content && 
+                   Math.abs(new Date(msg.created_at).getTime() - new Date(message.created_at).getTime()) < 1000;
+          }
+          return false;
+        });
+        
+        if (messageExists) {
+          console.log('Message already exists, skipping duplicate:', message.id || message.tempId || 'no-id');
+          return state; // Return unchanged state
+        }
+        
         return {
           messages: {
             ...state.messages,

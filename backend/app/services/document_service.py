@@ -49,9 +49,9 @@ class DocumentService:
         self.permission_service = permission_service or PermissionService(db)
         self.embedding_service = embedding_service or EmbeddingProviderService()
         
-        # Temporarily disable vector service to isolate the issue
-        self.vector_service = None
-        logger.info("Vector service disabled for debugging")
+        # Initialize vector service
+        self.vector_service = vector_service or VectorService()
+        logger.info("Vector service initialized successfully")
         
         # Initialize document processor with configurable settings
         try:

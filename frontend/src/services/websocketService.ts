@@ -1,7 +1,7 @@
 /**
  * WebSocket service for real-time updates
  */
-import { Notification } from '../types/notifications';
+
 
 export class WebSocketService {
   private socket: WebSocket | null = null;
@@ -156,6 +156,16 @@ export class WebSocketService {
       
       case 'document_update':
         this.notifyListeners('collaboration_update', data);
+        break;
+      
+      case 'chat_response':
+        // Handle chat responses from the bot
+        this.notifyListeners('chat_message', data);
+        break;
+      
+      case 'chat_message':
+        // Handle chat messages (user messages from other collaborators)
+        this.notifyListeners('chat_message', data);
         break;
       
       case 'pong':

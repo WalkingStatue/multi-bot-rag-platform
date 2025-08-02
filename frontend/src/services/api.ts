@@ -32,12 +32,13 @@ class APIClient {
       }
     );
 
-    // Response interceptor to handle token refresh
+    // Response interceptor to handle token refresh and rate limiting
     this.client.interceptors.response.use(
       (response) => response,
       async (error) => {
         const originalRequest = error.config;
 
+        // Handle 401 Unauthorized - token refresh
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
 
@@ -61,6 +62,21 @@ class APIClient {
             localStorage.removeItem('refresh_token');
             window.location.href = '/login';
             return Promise.reject(refreshError);
+          }
+        }
+
+        // Handle 429 Too Many Requests - rate limiting
+        if (error.response?.status === 429 && !originalRequest._retryCount) {
+          originalRequest._retryCount = (originalRequest._retryCount || 0) + 1;
+          
+          if (originalRequest._retryCount <= 3) {
+            const retryAfter = error.response.headers['retry-after'];
+            const delay = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, originalRequest._retryCount) * 1000;
+            
+            console.log(`Rate limited. Retrying after ${delay}ms (attempt ${originalRequest._retryCount}/3)`);
+            
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return this.client(originalRequest);
           }
         }
 

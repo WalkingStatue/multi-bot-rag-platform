@@ -10,6 +10,7 @@ from .providers.embedding_base import BaseEmbeddingProvider
 from .providers.openai_embedding_provider import OpenAIEmbeddingProvider
 from .providers.gemini_embedding_provider import GeminiEmbeddingProvider
 from .providers.anthropic_embedding_provider import AnthropicEmbeddingProvider
+from .providers.openrouter_embedding_provider import OpenRouterEmbeddingProvider
 
 
 logger = logging.getLogger(__name__)
@@ -34,7 +35,8 @@ class EmbeddingClientFactory:
         self._providers = {
             "openai": OpenAIEmbeddingProvider(self.client),
             "gemini": GeminiEmbeddingProvider(self.client),
-            "anthropic": AnthropicEmbeddingProvider(self.client)
+            "anthropic": AnthropicEmbeddingProvider(self.client),
+            "openrouter": OpenRouterEmbeddingProvider(self.client)
         }
     
     def get_provider(self, provider_name: str) -> BaseEmbeddingProvider:
@@ -83,10 +85,10 @@ class EmbeddingClientFactory:
         
         Args:
             provider_name: Name of the provider
-            api_key: API key to validate (None for local providers)
+            api_key: API key to validate
             
         Returns:
-            True if API key is valid or not required, False otherwise
+            True if API key is valid, False otherwise
             
         Raises:
             HTTPException: If provider is not supported
@@ -109,7 +111,7 @@ class EmbeddingClientFactory:
             provider_name: Name of the provider
             texts: List of texts to embed
             model: Model name
-            api_key: API key for the provider (None for local providers)
+            api_key: API key for the provider
             config: Optional configuration parameters
             
         Returns:

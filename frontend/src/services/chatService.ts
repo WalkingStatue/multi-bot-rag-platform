@@ -167,6 +167,54 @@ export class ChatService {
     const response = await apiClient.get(`/conversations/analytics${params}`);
     return response.data;
   }
+
+  /**
+   * Get available models for all providers
+   */
+  async getAvailableModels(): Promise<Record<string, string[]>> {
+    const response = await apiClient.get('/bots/models/available');
+    return response.data;
+  }
+
+  /**
+   * Get available models for a specific provider
+   */
+  async getProviderModels(provider: string): Promise<string[]> {
+    const response = await apiClient.get(`/bots/models/${provider}`);
+    return response.data;
+  }
+
+  /**
+   * Get supported providers
+   */
+  async getSupportedProviders(): Promise<string[]> {
+    const response = await apiClient.get('/bots/providers');
+    return response.data;
+  }
+
+  /**
+   * Get available embedding models for all providers
+   */
+  async getAvailableEmbeddingModels(): Promise<Record<string, string[]>> {
+    const response = await apiClient.get('/bots/embeddings/available');
+    return response.data;
+  }
+
+  /**
+   * Get available embedding models for a specific provider
+   */
+  async getProviderEmbeddingModels(provider: string): Promise<string[]> {
+    const response = await apiClient.get(`/bots/embeddings/${provider}`);
+    return response.data;
+  }
+
+  /**
+   * Get supported embedding providers
+   */
+  async getSupportedEmbeddingProviders(): Promise<string[]> {
+    const response = await apiClient.get('/bots/embeddings/providers');
+    return response.data;
+  }
 }
 
 // Export singleton instance

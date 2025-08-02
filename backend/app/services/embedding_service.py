@@ -76,11 +76,11 @@ class EmbeddingProviderService:
         Validate API key for a specific provider with retry logic.
         
         Args:
-            provider: Provider name (openai, gemini, local)
-            api_key: API key to validate (None for local provider)
+            provider: Provider name (openai, gemini, anthropic)
+            api_key: API key to validate
             
         Returns:
-            True if API key is valid or not required, False otherwise
+            True if API key is valid, False otherwise
         """
         try:
             return await self._retry_operation(
@@ -218,7 +218,7 @@ class EmbeddingProviderService:
             provider: Provider name
             texts: List of texts to embed
             model: Model name
-            api_key: API key for the provider (None for local provider)
+            api_key: API key for the provider
             config: Optional configuration parameters
             batch_size: Optional batch size for processing (uses default if None)
             
@@ -291,7 +291,7 @@ class EmbeddingProviderService:
             provider: Provider name
             text: Text to embed
             model: Model name
-            api_key: API key for the provider (None for local provider)
+            api_key: API key for the provider
             config: Optional configuration parameters
             
         Returns:

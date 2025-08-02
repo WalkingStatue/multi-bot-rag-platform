@@ -148,3 +148,111 @@ async def get_bot_analytics(
     Requires viewer role or higher.
     """
     return bot_service.get_bot_analytics(bot_id, current_user.id)
+
+
+@router.get("/models/available", response_model=Dict[str, List[str]])
+async def get_available_models(
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get available models for all supported providers.
+    
+    Returns a dictionary mapping provider names to their available models.
+    """
+    from ..services.llm_service import LLMProviderService
+    
+    llm_service = LLMProviderService()
+    try:
+        return llm_service.get_all_available_models()
+    finally:
+        await llm_service.close()
+
+
+@router.get("/models/{provider}", response_model=List[str])
+async def get_provider_models(
+    provider: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get available models for a specific provider.
+    
+    Args:
+        provider: Provider name (openai, anthropic, openrouter, gemini)
+    """
+    from ..services.llm_service import LLMProviderService
+    
+    llm_service = LLMProviderService()
+    try:
+        return llm_service.get_available_models(provider)
+    finally:
+        await llm_service.close()
+
+
+@router.get("/providers", response_model=List[str])
+async def get_supported_providers(
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get list of supported LLM providers.
+    """
+    from ..services.llm_service import LLMProviderService
+    
+    llm_service = LLMProviderService()
+    try:
+        return llm_service.get_supported_providers()
+    finally:
+        await llm_service.close()
+
+
+@router.get("/embeddings/available", response_model=Dict[str, List[str]])
+async def get_available_embedding_models(
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get available embedding models for all supported providers.
+    
+    Returns a dictionary mapping provider names to their available embedding models.
+    """
+    from ..services.embedding_service import EmbeddingProviderService
+    
+    embedding_service = EmbeddingProviderService()
+    try:
+        return embedding_service.get_all_available_models()
+    finally:
+        await embedding_service.close()
+
+
+@router.get("/embeddings/providers", response_model=List[str])
+async def get_supported_embedding_providers(
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get list of supported embedding providers.
+    """
+    from ..services.embedding_service import EmbeddingProviderService
+    
+    embedding_service = EmbeddingProviderService()
+    try:
+        return embedding_service.get_supported_providers()
+    finally:
+        await embedding_service.close()
+
+
+@router.get("/embeddings/{provider}", response_model=List[str])
+async def get_provider_embedding_models(
+    provider: str,
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get available embedding models for a specific provider.
+    
+    Args:
+        provider: Provider name (openai, gemini, anthropic)
+    """
+    from ..services.embedding_service import EmbeddingProviderService
+    
+    embedding_service = EmbeddingProviderService()
+    try:
+        return embedding_service.get_available_models(provider)
+    finally:
+        await embedding_service.close()

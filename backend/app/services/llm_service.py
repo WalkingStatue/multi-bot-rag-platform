@@ -213,10 +213,21 @@ class LLMProviderService:
         """
         try:
             provider_instance = self.factory.get_provider(provider)
+            
+            # Get model-specific max tokens
+            model_max_tokens = {}
+            for model in provider_instance.get_available_models():
+                try:
+                    model_max_tokens[model] = provider_instance.get_model_max_tokens(model)
+                except Exception as e:
+                    logger.warning(f"Failed to get max tokens for {provider} model {model}: {e}")
+                    model_max_tokens[model] = provider_instance.get_default_config().get("max_tokens", 1000)
+            
             return {
                 "name": provider_instance.provider_name,
                 "base_url": provider_instance.base_url,
                 "available_models": provider_instance.get_available_models(),
+                "model_max_tokens": model_max_tokens,
                 "default_config": provider_instance.get_default_config()
             }
         except HTTPException:

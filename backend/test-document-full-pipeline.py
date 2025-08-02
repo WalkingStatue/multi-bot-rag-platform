@@ -93,8 +93,28 @@ async def test_full_document_pipeline():
                 db.commit()
                 print(f"✅ Updated bot to use Gemini: {bot.name} (ID: {bot.id})")
             else:
-                print("❌ No bot found for user")
-                return False
+                # Create a test bot
+                print("📝 Creating test bot with Gemini embedding...")
+                from app.services.bot_service import BotService
+                from app.schemas.bot import BotCreate
+                
+                bot_service = BotService(db)
+                bot_config = BotCreate(
+                    name="Test RAG Bot",
+                    description="Test bot for document processing pipeline",
+                    system_prompt="You are a helpful AI assistant with access to uploaded documents.",
+                    llm_provider="gemini",
+                    llm_model="gemini-1.5-flash",
+                    embedding_provider="gemini",
+                    embedding_model="text-embedding-004",
+                    temperature=0.7,
+                    max_tokens=1000,
+                    is_public=False,
+                    allow_collaboration=True
+                )
+                
+                bot = bot_service.create_bot(user.id, bot_config)
+                print(f"✅ Created test bot: {bot.name} (ID: {bot.id})")
         else:
             print(f"✅ Found bot with Gemini embedding: {bot.name} (ID: {bot.id})")
         

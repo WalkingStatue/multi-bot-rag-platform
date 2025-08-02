@@ -65,7 +65,7 @@ export const BotForm: React.FC<BotFormProps> = ({
         description: initialData.description || '',
         llm_provider: initialData.llm_provider as 'openai' | 'anthropic' | 'openrouter' | 'gemini',
         llm_model: initialData.llm_model,
-        embedding_provider: (initialData.embedding_provider as 'openai' | 'gemini' | 'local') || 'openai',
+        embedding_provider: (initialData.embedding_provider as 'openai' | 'gemini' | 'anthropic') || 'openai',
         embedding_model: initialData.embedding_model || 'text-embedding-3-small',
         system_prompt: initialData.system_prompt || '',
         temperature: initialData.temperature || 0.7,
@@ -116,7 +116,7 @@ export const BotForm: React.FC<BotFormProps> = ({
   };
 
   const handleEmbeddingProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const provider = e.target.value as 'openai' | 'gemini' | 'local';
+    const provider = e.target.value as 'openai' | 'gemini' | 'anthropic';
     
     if (!providerSettings) return;
     

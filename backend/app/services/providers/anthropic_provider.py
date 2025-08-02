@@ -61,12 +61,19 @@ class AnthropicProvider(BaseLLMProvider):
         if config:
             default_config.update(config)
         
+        # Parse the prompt to extract system message and conversation context
+        system_message, messages = self._parse_prompt_to_messages(prompt)
+        
         payload = {
             "model": model,
             "max_tokens": default_config.get("max_tokens", 1000),
             "temperature": default_config.get("temperature", 0.7),
-            "messages": [{"role": "user", "content": prompt}]
+            "messages": messages
         }
+        
+        # Add system message if present
+        if system_message:
+            payload["system"] = system_message
         
         # Add top_p if specified
         if "top_p" in default_config:
@@ -100,6 +107,66 @@ class AnthropicProvider(BaseLLMProvider):
                 detail=f"Failed to generate Anthropic response: {str(e)}"
             )
     
+    def _parse_prompt_to_messages(self, prompt: str) -> tuple[str, List[Dict[str, str]]]:
+        """Parse a formatted prompt into Anthropic messages format with system message."""
+        system_message = ""
+        messages = []
+        
+        # Split prompt into sections
+        sections = prompt.split('\n\n')
+        current_content = []
+        
+        for section in sections:
+            if section.startswith('System:'):
+                if current_content:
+                    messages.append({"role": "user", "content": '\n\n'.join(current_content)})
+                    current_content = []
+                system_message = section[7:].strip()  # Remove 'System:' prefix
+            elif section.startswith('Conversation History:'):
+                if current_content:
+                    messages.append({"role": "user", "content": '\n\n'.join(current_content)})
+                    current_content = []
+                # Parse conversation history
+                history_content = section[21:].strip()  # Remove 'Conversation History:' prefix
+                history_messages = self._parse_conversation_history(history_content)
+                messages.extend(history_messages)
+            elif section.startswith('User:'):
+                if current_content:
+                    messages.append({"role": "user", "content": '\n\n'.join(current_content)})
+                    current_content = []
+                user_content = section[5:].strip()  # Remove 'User:' prefix
+                messages.append({"role": "user", "content": user_content})
+            elif section.startswith('Assistant:'):
+                # This is just a prompt continuation, ignore
+                continue
+            else:
+                # Add to current content (context, etc.)
+                current_content.append(section)
+        
+        # Add any remaining content as user message
+        if current_content:
+            messages.append({"role": "user", "content": '\n\n'.join(current_content)})
+        
+        # Ensure we have at least one message
+        if not messages:
+            messages.append({"role": "user", "content": prompt})
+        
+        return system_message, messages
+    
+    def _parse_conversation_history(self, history_content: str) -> List[Dict[str, str]]:
+        """Parse conversation history into messages."""
+        messages = []
+        lines = history_content.split('\n')
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('User:'):
+                messages.append({"role": "user", "content": line[5:].strip()})
+            elif line.startswith('Assistant:'):
+                messages.append({"role": "assistant", "content": line[10:].strip()})
+        
+        return messages
+    
     def get_available_models(self) -> List[str]:
         """Get list of available Anthropic models (static fallback)."""
         return [
@@ -110,6 +177,26 @@ class AnthropicProvider(BaseLLMProvider):
             "claude-2.0",
             "claude-instant-1.2"
         ]
+    
+    def get_model_max_tokens(self, model: str) -> int:
+        """Get default max tokens for a specific model."""
+        model_limits = {
+            "claude-3-opus-20240229": 4096,
+            "claude-3-sonnet-20240229": 4096,
+            "claude-3-haiku-20240307": 4096,
+            "claude-2.1": 4096,
+            "claude-2.0": 4096,
+            "claude-instant-1.2": 4096
+        }
+        return model_limits.get(model, 4096)  # Default to 4096 if model not found
+    
+    def get_default_config(self) -> Dict[str, Any]:
+        """Get default configuration for Anthropic provider."""
+        return {
+            "temperature": 0.7,
+            "max_tokens": 4096,  # Will be overridden by model-specific value
+            "top_p": 1.0
+        }
     
     async def _fetch_models_from_api(self, api_key: str) -> List[str]:
         """

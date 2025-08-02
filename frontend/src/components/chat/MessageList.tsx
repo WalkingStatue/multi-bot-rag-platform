@@ -57,7 +57,7 @@ export const MessageList: React.FC<MessageListProps> = ({
 
         return (
           <MessageBubble
-            key={message.id || message.tempId}
+            key={message.id || message.tempId || `msg-${index}`}
             message={message}
             showTimestamp={showTimestamp}
             isLastMessage={isLastMessage}

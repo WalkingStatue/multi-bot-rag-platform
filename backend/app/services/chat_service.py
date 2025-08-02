@@ -109,9 +109,9 @@ class ChatService:
                 bot, chat_request.message
             )
             
-            # Step 6: Get conversation history
+            # Step 6: Get conversation history (excluding current message)
             conversation_history = await self._get_conversation_history(
-                session.id, user_id
+                session.id, user_id, exclude_current_message=chat_request.message
             )
             
             # Step 7: Build prompt with context
@@ -241,46 +241,145 @@ class ChatService:
     ) -> List[Dict[str, Any]]:
         """Retrieve relevant document chunks using semantic search."""
         try:
-            # Generate query embedding
-            user_api_key = self._get_user_api_key_sync(
-                bot.owner_id, bot.embedding_provider
-            )
+            logger.info(f"Starting RAG retrieval for bot {bot.id} with query: '{query[:50]}...' using embedding provider {bot.embedding_provider}")
             
-            query_embedding = await self.embedding_service.generate_single_embedding(
-                provider=bot.embedding_provider,
-                text=query,
-                model=bot.embedding_model,
-                api_key=user_api_key
-            )
+            # Check if bot has documents uploaded
+            if not await self._bot_has_documents(bot.id):
+                logger.info(f"Bot {bot.id} has no documents uploaded, skipping RAG retrieval")
+                return []
             
-            # Search for relevant chunks
-            relevant_chunks = await self.vector_service.search_relevant_chunks(
-                bot_id=str(bot.id),
-                query_embedding=query_embedding,
-                top_k=self.max_retrieved_chunks,
-                score_threshold=self.similarity_threshold
-            )
+            # Check if vector collection exists first
+            if not await self.vector_service.vector_store.collection_exists(str(bot.id)):
+                logger.warning(f"Vector collection for bot {bot.id} does not exist, skipping RAG retrieval")
+                return []
             
-            logger.info(f"Retrieved {len(relevant_chunks)} relevant chunks for bot {bot.id}")
-            return relevant_chunks
+            # Generate query embedding with comprehensive error handling
+            try:
+                # Get user's API key for the configured embedding provider
+                user_api_key = self._get_user_api_key_sync(
+                    bot.owner_id, bot.embedding_provider
+                )
+                logger.info(f"Retrieved API key for embedding provider {bot.embedding_provider}")
+                
+                # Validate and fix embedding model for provider
+                embedding_model = bot.embedding_model
+                if not self.embedding_service.validate_model_for_provider(bot.embedding_provider, embedding_model):
+                    logger.warning(f"Model {embedding_model} not valid for provider {bot.embedding_provider}, using default")
+                    # Get default model for provider
+                    available_models = self.embedding_service.get_available_models(bot.embedding_provider)
+                    if available_models:
+                        embedding_model = available_models[0]
+                        logger.info(f"Using default model {embedding_model} for provider {bot.embedding_provider}")
+                        
+                        # Update bot's embedding model in database for future use
+                        bot.embedding_model = embedding_model
+                        self.db.commit()
+                    else:
+                        logger.error(f"No available models for provider {bot.embedding_provider}")
+                        return []
+                
+                # Generate embedding with retry logic
+                logger.info(f"Generating embedding for query using {bot.embedding_provider}/{embedding_model}")
+                query_embedding = await self.embedding_service.generate_single_embedding(
+                    provider=bot.embedding_provider,
+                    text=query,
+                    model=embedding_model,
+                    api_key=user_api_key
+                )
+                
+                if not query_embedding:
+                    logger.error(f"Empty embedding generated for bot {bot.id}")
+                    return []
+                
+                logger.info(f"Generated query embedding with {len(query_embedding)} dimensions using {bot.embedding_provider}/{embedding_model}")
+                
+            except HTTPException as http_error:
+                logger.error(f"HTTP error generating embedding for bot {bot.id}: {http_error.detail}")
+                return []
+            except Exception as embedding_error:
+                logger.error(f"Failed to generate embedding for bot {bot.id}: {embedding_error}")
+                import traceback
+                logger.error(f"Embedding error traceback: {traceback.format_exc()}")
+                return []
+            
+            # Search for relevant chunks with improved error handling
+            try:
+                logger.info(f"Searching vector store for bot {bot.id} with {len(query_embedding)} dimensional embedding")
+                relevant_chunks = await self.vector_service.search_relevant_chunks(
+                    bot_id=str(bot.id),
+                    query_embedding=query_embedding,
+                    top_k=self.max_retrieved_chunks,
+                    score_threshold=self.similarity_threshold
+                )
+                
+                logger.info(f"Retrieved {len(relevant_chunks)} relevant chunks for bot {bot.id}")
+                if relevant_chunks:
+                    logger.info(f"Top chunk score: {relevant_chunks[0].get('score', 'N/A')}")
+                    # Log chunk preview for debugging
+                    for i, chunk in enumerate(relevant_chunks[:2]):  # Log first 2 chunks
+                        preview = chunk.get('text', '')[:100] + '...' if len(chunk.get('text', '')) > 100 else chunk.get('text', '')
+                        logger.info(f"Chunk {i+1} (score: {chunk.get('score', 'N/A')}): {preview}")
+                else:
+                    logger.info(f"No relevant chunks found for bot {bot.id} with similarity threshold {self.similarity_threshold}")
+                
+                return relevant_chunks
+                
+            except HTTPException as http_error:
+                logger.error(f"HTTP error searching vector store for bot {bot.id}: {http_error.detail}")
+                return []
+            except Exception as search_error:
+                logger.error(f"Failed to search vector store for bot {bot.id}: {search_error}")
+                import traceback
+                logger.error(f"Search error traceback: {traceback.format_exc()}")
+                return []
             
         except Exception as e:
-            logger.warning(f"Failed to retrieve chunks for bot {bot.id}: {e}")
+            logger.error(f"Failed to retrieve chunks for bot {bot.id}: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             # Return empty list if retrieval fails - bot can still respond without RAG
             return []
+    
+    async def _bot_has_documents(self, bot_id: uuid.UUID) -> bool:
+        """Check if bot has any documents uploaded."""
+        try:
+            from ..models.document import Document
+            document_count = self.db.query(Document).filter(Document.bot_id == bot_id).count()
+            return document_count > 0
+        except Exception as e:
+            logger.error(f"Failed to check documents for bot {bot_id}: {e}")
+            return False
     
     async def _get_conversation_history(
         self,
         session_id: uuid.UUID,
-        user_id: uuid.UUID
+        user_id: uuid.UUID,
+        exclude_current_message: Optional[str] = None
     ) -> List[Message]:
         """Get recent conversation history for context."""
-        messages = self.conversation_service.get_session_messages(
-            session_id, user_id, limit=self.max_history_messages
-        )
-        
-        # Return messages in chronological order (oldest first)
-        return sorted(messages, key=lambda m: m.created_at)
+        try:
+            # Get more messages than needed to account for filtering
+            messages = self.conversation_service.get_session_messages(
+                session_id, user_id, limit=self.max_history_messages * 2
+            )
+            
+            # Filter out the current user message if provided
+            if exclude_current_message:
+                messages = [msg for msg in messages if msg.content != exclude_current_message or msg.role != "user"]
+            
+            # Sort messages in chronological order (oldest first)
+            sorted_messages = sorted(messages, key=lambda m: m.created_at)
+            
+            # Take the most recent messages up to the limit (excluding the very last one which might be the current message)
+            recent_messages = sorted_messages[-self.max_history_messages:] if len(sorted_messages) > self.max_history_messages else sorted_messages
+            
+            logger.info(f"Retrieved {len(recent_messages)} messages from conversation history for session {session_id}")
+            
+            return recent_messages
+            
+        except Exception as e:
+            logger.error(f"Failed to get conversation history for session {session_id}: {e}")
+            return []
     
     async def _build_prompt(
         self,
@@ -303,13 +402,20 @@ class ChatService:
             ])
             prompt_parts.append(f"\nRelevant Context:\n{context_text}")
         
-        # Add conversation history
+        # Add conversation history - FIXED: Ensure we get the full history excluding current message
         if history:
-            history_text = "\n".join([
-                f"{msg.role.title()}: {msg.content}"
-                for msg in history[-self.max_history_messages:]  # Limit history
-            ])
-            prompt_parts.append(f"\nConversation History:\n{history_text}")
+            # Filter out the current user message if it's already in history
+            filtered_history = [msg for msg in history if msg.content != user_input or msg.role != "user"]
+            
+            # Take the most recent messages for context
+            recent_history = filtered_history[-self.max_history_messages:] if len(filtered_history) > self.max_history_messages else filtered_history
+            
+            if recent_history:
+                history_text = "\n".join([
+                    f"{msg.role.title()}: {msg.content}"
+                    for msg in recent_history
+                ])
+                prompt_parts.append(f"\nConversation History:\n{history_text}")
         
         # Add current user input
         prompt_parts.append(f"\nUser: {user_input}")
@@ -318,40 +424,63 @@ class ChatService:
         # Join and truncate if necessary
         full_prompt = "\n".join(prompt_parts)
         
+        # Improved prompt length management
         if len(full_prompt) > self.max_prompt_length:
-            # Truncate from the middle (keep system prompt and recent context)
+            logger.warning(f"Prompt length {len(full_prompt)} exceeds maximum {self.max_prompt_length}, truncating...")
+            
+            # Priority order: System prompt > Current user input > Document context > History
             system_part = prompt_parts[0]
-            context_part = prompt_parts[1] if chunks else ""
-            user_part = prompt_parts[-2] + "\n" + prompt_parts[-1]  # User input + Assistant:
+            user_part = f"\nUser: {user_input}\nAssistant:"
             
-            # Calculate available space for history
-            fixed_parts_length = len(system_part) + len(context_part) + len(user_part) + 20  # Extra space for formatting
-            remaining_length = self.max_prompt_length - fixed_parts_length
+            # Calculate base length
+            base_length = len(system_part) + len(user_part) + 50  # Extra buffer
+            remaining_length = self.max_prompt_length - base_length
             
-            if remaining_length > 100 and history:  # Keep some history if possible
-                history_text = "\n".join([
-                    f"{msg.role.title()}: {msg.content}"
-                    for msg in history[-self.max_history_messages:]
+            context_part = ""
+            history_part = ""
+            
+            # Add context if there's space
+            if chunks and remaining_length > 200:
+                context_text = "\n\n".join([
+                    f"Document Context {i+1}:\n{chunk['text']}"
+                    for i, chunk in enumerate(chunks)
                 ])
+                full_context = f"\nRelevant Context:\n{context_text}"
                 
-                if len(history_text) > remaining_length:
-                    # Truncate history to fit
-                    truncated_history = history_text[:remaining_length-10] + "..."
-                    full_prompt = f"{system_part}\n{context_part}\n\nConversation History:\n{truncated_history}\n{user_part}"
+                if len(full_context) <= remaining_length // 2:  # Use up to half remaining space for context
+                    context_part = full_context
+                    remaining_length -= len(context_part)
                 else:
-                    full_prompt = f"{system_part}\n{context_part}\n\nConversation History:\n{history_text}\n{user_part}"
-            else:
-                # No space for history, just use system + context + user
-                full_prompt = f"{system_part}\n{context_part}\n{user_part}"
+                    # Truncate context to fit
+                    available_context = remaining_length // 2
+                    truncated_context = context_text[:available_context-50] + "...\n[Context truncated]"
+                    context_part = f"\nRelevant Context:\n{truncated_context}"
+                    remaining_length -= len(context_part)
+            
+            # Add history if there's remaining space
+            if history and remaining_length > 100:
+                filtered_history = [msg for msg in history if msg.content != user_input or msg.role != "user"]
+                recent_history = filtered_history[-self.max_history_messages:] if len(filtered_history) > self.max_history_messages else filtered_history
                 
-            # Final check - if still too long, truncate context
-            if len(full_prompt) > self.max_prompt_length:
-                available_for_context = self.max_prompt_length - len(system_part) - len(user_part) - 20
-                if available_for_context > 100 and context_part:
-                    truncated_context = context_part[:available_for_context-10] + "..."
-                    full_prompt = f"{system_part}\n{truncated_context}\n{user_part}"
-                else:
-                    full_prompt = f"{system_part}\n{user_part}"
+                if recent_history:
+                    history_text = "\n".join([
+                        f"{msg.role.title()}: {msg.content}"
+                        for msg in recent_history
+                    ])
+                    full_history = f"\nConversation History:\n{history_text}"
+                    
+                    if len(full_history) <= remaining_length:
+                        history_part = full_history
+                    else:
+                        # Truncate history to fit, keeping most recent messages
+                        available_history = remaining_length - 50
+                        truncated_history = history_text[:available_history] + "...\n[History truncated]"
+                        history_part = f"\nConversation History:\n{truncated_history}"
+            
+            # Rebuild prompt with available parts
+            full_prompt = system_part + context_part + history_part + user_part
+            
+            logger.info(f"Truncated prompt to length {len(full_prompt)} (context: {len(context_part)}, history: {len(history_part)})")
         
         return full_prompt
     
@@ -365,10 +494,20 @@ class ChatService:
         # Get user's API key for the LLM provider
         user_api_key = await self._get_user_api_key(user_id, bot.llm_provider)
         
+        # Get model-specific max tokens if bot's max_tokens is default
+        max_tokens = bot.max_tokens
+        if max_tokens == 1000:  # Default value, use model-specific
+            try:
+                provider_instance = self.llm_service.factory.get_provider(bot.llm_provider)
+                max_tokens = provider_instance.get_model_max_tokens(bot.llm_model)
+            except Exception as e:
+                logger.warning(f"Failed to get model-specific max tokens: {e}")
+                max_tokens = bot.max_tokens  # Fall back to bot setting
+        
         # Prepare LLM configuration
         llm_config = {
             "temperature": bot.temperature,
-            "max_tokens": bot.max_tokens,
+            "max_tokens": max_tokens,
             "top_p": bot.top_p,
             "frequency_penalty": bot.frequency_penalty,
             "presence_penalty": bot.presence_penalty
@@ -529,30 +668,8 @@ class ChatService:
             if not user:
                 return
             
-            # Send user message notification
-            user_message_data = {
-                "message_id": str(user_message.id),
-                "session_id": str(session_id),
-                "user_id": str(user_id),
-                "username": user.username,
-                "content": user_message.content,
-                "role": "user",
-                "timestamp": user_message.created_at.isoformat(),
-                "metadata": user_message.metadata
-            }
-            
-            await connection_manager.broadcast_to_bot_collaborators(
-                bot_id=str(bot_id),
-                message={
-                    "type": "chat_message",
-                    "bot_id": str(bot_id),
-                    "data": user_message_data
-                },
-                exclude_user=str(user_id),
-                db=self.db
-            )
-            
-            # Send assistant message notification
+            # FIXED: Only send assistant message notification to avoid duplicates
+            # The user message is already displayed in the frontend when sent
             assistant_message_data = {
                 "message_id": str(assistant_message.id),
                 "session_id": str(session_id),
@@ -561,20 +678,21 @@ class ChatService:
                 "content": assistant_message.content,
                 "role": "assistant",
                 "timestamp": assistant_message.created_at.isoformat(),
-                "metadata": assistant_message.metadata
+                "metadata": assistant_message.message_metadata if hasattr(assistant_message, 'message_metadata') else {}
             }
             
+            # Send to all collaborators including the user who sent the message
             await connection_manager.broadcast_to_bot_collaborators(
                 bot_id=str(bot_id),
                 message={
-                    "type": "chat_message",
+                    "type": "chat_response",  # Changed type to distinguish from user messages
                     "bot_id": str(bot_id),
                     "data": assistant_message_data
                 },
                 db=self.db
             )
             
-            logger.info(f"Sent WebSocket notifications for chat in bot {bot_id}")
+            logger.info(f"Sent assistant response WebSocket notification for bot {bot_id}")
             
         except Exception as e:
             logger.error(f"Failed to send chat WebSocket notifications: {e}")
