@@ -51,7 +51,7 @@ class ChatService:
         # Configuration
         self.max_history_messages = 10
         self.max_retrieved_chunks = 5
-        self.similarity_threshold = 0.7
+        self.similarity_threshold = 0.01  # Very low threshold for Gemini embeddings
         self.max_prompt_length = 8000
     
     async def process_message(
@@ -255,13 +255,14 @@ class ChatService:
             
             # Generate query embedding with comprehensive error handling
             try:
-                # Get user's API key for the configured embedding provider
+                # FIXED: Get user's API key for the configured embedding provider
+                # Use bot owner's API key since they configured the embedding provider
                 user_api_key = self._get_user_api_key_sync(
                     bot.owner_id, bot.embedding_provider
                 )
-                logger.info(f"Retrieved API key for embedding provider {bot.embedding_provider}")
+                logger.info(f"Retrieved API key for embedding provider {bot.embedding_provider} from bot owner")
                 
-                # Validate and fix embedding model for provider
+                # FIXED: Validate embedding model compatibility and dimensions
                 embedding_model = bot.embedding_model
                 if not self.embedding_service.validate_model_for_provider(bot.embedding_provider, embedding_model):
                     logger.warning(f"Model {embedding_model} not valid for provider {bot.embedding_provider}, using default")
@@ -278,6 +279,26 @@ class ChatService:
                         logger.error(f"No available models for provider {bot.embedding_provider}")
                         return []
                 
+                # FIXED: Verify embedding dimensions match stored embeddings
+                expected_dimension = self.embedding_service.get_embedding_dimension(bot.embedding_provider, embedding_model)
+                logger.info(f"Expected embedding dimension: {expected_dimension}")
+                
+                # Get collection info to verify dimensions match
+                try:
+                    collection_info = await self.vector_service.get_bot_collection_stats(str(bot.id))
+                    stored_dimension = collection_info.get('config', {}).get('vector_size', 0)
+                    
+                    if stored_dimension != expected_dimension:
+                        logger.error(f"Dimension mismatch: stored={stored_dimension}, expected={expected_dimension}")
+                        logger.error(f"Documents were processed with different embedding model. Please reprocess documents.")
+                        return []
+                    
+                    logger.info(f"Embedding dimensions match: {expected_dimension}")
+                    
+                except Exception as dim_error:
+                    logger.warning(f"Could not verify embedding dimensions: {dim_error}")
+                    # Continue anyway, but log the issue
+                
                 # Generate embedding with retry logic
                 logger.info(f"Generating embedding for query using {bot.embedding_provider}/{embedding_model}")
                 query_embedding = await self.embedding_service.generate_single_embedding(
@@ -293,8 +314,16 @@ class ChatService:
                 
                 logger.info(f"Generated query embedding with {len(query_embedding)} dimensions using {bot.embedding_provider}/{embedding_model}")
                 
+                # FIXED: Verify query embedding dimension matches expected
+                if len(query_embedding) != expected_dimension:
+                    logger.error(f"Query embedding dimension mismatch: got {len(query_embedding)}, expected {expected_dimension}")
+                    return []
+                
             except HTTPException as http_error:
                 logger.error(f"HTTP error generating embedding for bot {bot.id}: {http_error.detail}")
+                # FIXED: Provide more specific error information
+                if "API key" in str(http_error.detail):
+                    logger.error(f"Bot owner needs to configure API key for embedding provider: {bot.embedding_provider}")
                 return []
             except Exception as embedding_error:
                 logger.error(f"Failed to generate embedding for bot {bot.id}: {embedding_error}")
@@ -321,6 +350,30 @@ class ChatService:
                         logger.info(f"Chunk {i+1} (score: {chunk.get('score', 'N/A')}): {preview}")
                 else:
                     logger.info(f"No relevant chunks found for bot {bot.id} with similarity threshold {self.similarity_threshold}")
+                    # FIXED: Lower similarity threshold temporarily to see if there are any matches
+                    logger.info(f"Trying with lower similarity threshold (0.5) to debug...")
+                    debug_chunks = await self.vector_service.search_relevant_chunks(
+                        bot_id=str(bot.id),
+                        query_embedding=query_embedding,
+                        top_k=self.max_retrieved_chunks,
+                        score_threshold=0.5
+                    )
+                    if debug_chunks:
+                        logger.info(f"Found {len(debug_chunks)} chunks with lower threshold. Top score: {debug_chunks[0].get('score', 'N/A')}")
+                    else:
+                        logger.info("No chunks found even with lower threshold - trying without threshold...")
+                        # Try without any threshold to see if there are ANY chunks
+                        no_threshold_chunks = await self.vector_service.search_relevant_chunks(
+                            bot_id=str(bot.id),
+                            query_embedding=query_embedding,
+                            top_k=self.max_retrieved_chunks,
+                            score_threshold=None
+                        )
+                        if no_threshold_chunks:
+                            logger.info(f"Found {len(no_threshold_chunks)} chunks without threshold. Top score: {no_threshold_chunks[0].get('score', 'N/A')}")
+                            logger.warning(f"Similarity scores are very low. Consider lowering similarity_threshold from {self.similarity_threshold}")
+                        else:
+                            logger.error("No chunks found at all - possible embedding/indexing issue or empty collection")
                 
                 return relevant_chunks
                 
@@ -697,6 +750,113 @@ class ChatService:
         except Exception as e:
             logger.error(f"Failed to send chat WebSocket notifications: {e}")
             # Don't raise exception - WebSocket failure shouldn't break chat
+    
+    async def diagnose_embedding_issues(
+        self,
+        bot_id: uuid.UUID,
+        user_id: uuid.UUID
+    ) -> Dict[str, Any]:
+        """
+        Diagnose embedding and RAG retrieval issues for a bot.
+        
+        Args:
+            bot_id: Bot identifier
+            user_id: User identifier
+            
+        Returns:
+            Dictionary with diagnostic information
+        """
+        try:
+            # Get bot configuration
+            bot = self.db.query(Bot).filter(Bot.id == bot_id).first()
+            if not bot:
+                return {"error": "Bot not found"}
+            
+            diagnosis = {
+                "bot_id": str(bot_id),
+                "embedding_provider": bot.embedding_provider,
+                "embedding_model": bot.embedding_model,
+                "llm_provider": bot.llm_provider,
+                "llm_model": bot.llm_model,
+                "issues": [],
+                "recommendations": []
+            }
+            
+            # Check if bot has documents
+            has_docs = await self._bot_has_documents(bot_id)
+            diagnosis["has_documents"] = has_docs
+            
+            if not has_docs:
+                diagnosis["issues"].append("No documents uploaded")
+                diagnosis["recommendations"].append("Upload documents to enable RAG retrieval")
+                return diagnosis
+            
+            # Check vector collection exists
+            collection_exists = await self.vector_service.vector_store.collection_exists(str(bot_id))
+            diagnosis["vector_collection_exists"] = collection_exists
+            
+            if not collection_exists:
+                diagnosis["issues"].append("Vector collection does not exist")
+                diagnosis["recommendations"].append("Reprocess documents to create vector collection")
+                return diagnosis
+            
+            # Check API key availability
+            try:
+                api_key = self._get_user_api_key_sync(bot.owner_id, bot.embedding_provider)
+                diagnosis["api_key_available"] = bool(api_key)
+            except:
+                diagnosis["api_key_available"] = False
+                diagnosis["issues"].append(f"No API key configured for embedding provider: {bot.embedding_provider}")
+                diagnosis["recommendations"].append(f"Bot owner should configure API key for {bot.embedding_provider}")
+            
+            # Check model validity
+            model_valid = self.embedding_service.validate_model_for_provider(bot.embedding_provider, bot.embedding_model)
+            diagnosis["model_valid"] = model_valid
+            
+            if not model_valid:
+                diagnosis["issues"].append(f"Model {bot.embedding_model} not valid for provider {bot.embedding_provider}")
+                available_models = self.embedding_service.get_available_models(bot.embedding_provider)
+                diagnosis["available_models"] = available_models
+                diagnosis["recommendations"].append(f"Use one of the available models: {available_models}")
+            
+            # Check embedding dimensions
+            try:
+                expected_dimension = self.embedding_service.get_embedding_dimension(bot.embedding_provider, bot.embedding_model)
+                diagnosis["expected_dimension"] = expected_dimension
+                
+                collection_info = await self.vector_service.get_bot_collection_stats(str(bot_id))
+                stored_dimension = collection_info.get('config', {}).get('vector_size', 0)
+                diagnosis["stored_dimension"] = stored_dimension
+                
+                if stored_dimension != expected_dimension:
+                    diagnosis["issues"].append(f"Dimension mismatch: stored={stored_dimension}, expected={expected_dimension}")
+                    diagnosis["recommendations"].append("Reprocess documents with current embedding model")
+                
+            except Exception as e:
+                diagnosis["issues"].append(f"Could not verify embedding dimensions: {str(e)}")
+            
+            # Test embedding generation
+            if diagnosis["api_key_available"] and diagnosis["model_valid"]:
+                try:
+                    api_key = self._get_user_api_key_sync(bot.owner_id, bot.embedding_provider)
+                    test_embedding = await self.embedding_service.generate_single_embedding(
+                        provider=bot.embedding_provider,
+                        text="test query",
+                        model=bot.embedding_model,
+                        api_key=api_key
+                    )
+                    diagnosis["embedding_generation_works"] = True
+                    diagnosis["test_embedding_dimension"] = len(test_embedding)
+                except Exception as e:
+                    diagnosis["embedding_generation_works"] = False
+                    diagnosis["embedding_error"] = str(e)
+                    diagnosis["issues"].append(f"Embedding generation failed: {str(e)}")
+            
+            return diagnosis
+            
+        except Exception as e:
+            logger.error(f"Error diagnosing embedding issues for bot {bot_id}: {e}")
+            return {"error": f"Diagnosis failed: {str(e)}"}
     
     async def close(self):
         """Close all service connections and clean up resources."""

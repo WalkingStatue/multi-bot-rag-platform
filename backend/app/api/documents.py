@@ -270,3 +270,47 @@ async def get_document_stats(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to retrieve document statistics"
         )
+
+
+@router.post("/reprocess")
+async def reprocess_bot_documents(
+    bot_id: UUID,
+    force_recreate_collection: bool = Query(
+        False, 
+        description="Whether to delete and recreate the vector collection"
+    ),
+    current_user: User = Depends(get_current_user),
+    document_service: DocumentService = Depends(get_document_service)
+):
+    """
+    Reprocess all documents for a bot with current embedding configuration.
+    
+    This endpoint is useful when:
+    - The bot's embedding provider or model has changed
+    - There are dimension mismatches in the vector store
+    - Documents were processed with different embedding settings
+    - RAG retrieval is not working properly
+    
+    Requires admin permissions or higher.
+    """
+    try:
+        result = await document_service.reprocess_bot_documents(
+            bot_id=bot_id,
+            user_id=current_user.id,
+            force_recreate_collection=force_recreate_collection
+        )
+        
+        return {
+            "success": True,
+            "message": "Document reprocessing completed",
+            **result
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error reprocessing documents for bot {bot_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Document reprocessing failed: {str(e)}"
+        )

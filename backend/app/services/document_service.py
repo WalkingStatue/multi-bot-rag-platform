@@ -616,6 +616,115 @@ class DocumentService:
                 detail=f"Document search failed: {str(e)}"
             )
     
+    async def reprocess_bot_documents(
+        self,
+        bot_id: UUID,
+        user_id: UUID,
+        force_recreate_collection: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Reprocess all documents for a bot with current embedding configuration.
+        
+        This is useful when:
+        - Embedding provider or model has changed
+        - Vector collection has dimension mismatches
+        - Documents were processed with different embedding settings
+        
+        Args:
+            bot_id: Bot identifier
+            user_id: User identifier
+            force_recreate_collection: Whether to delete and recreate the vector collection
+            
+        Returns:
+            Processing results and statistics
+            
+        Raises:
+            HTTPException: If permission denied or processing fails
+        """
+        # Check permissions - user must be admin or higher
+        if not self.permission_service.check_bot_permission(
+            user_id, bot_id, "delete_documents"
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions to reprocess documents"
+            )
+        
+        try:
+            # Get bot configuration
+            bot = self.db.query(Bot).filter(Bot.id == bot_id).first()
+            if not bot:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Bot not found"
+                )
+            
+            # Get all documents for this bot
+            documents = self.db.query(Document).filter(Document.bot_id == bot_id).all()
+            
+            if not documents:
+                return {
+                    "message": "No documents to reprocess",
+                    "documents_processed": 0,
+                    "total_chunks": 0
+                }
+            
+            logger.info(f"Starting reprocessing of {len(documents)} documents for bot {bot_id}")
+            
+            # Delete existing vector collection if requested
+            if force_recreate_collection:
+                logger.info(f"Deleting existing vector collection for bot {bot_id}")
+                await self.vector_service.delete_bot_collection(str(bot_id))
+            
+            # Delete existing chunks from database
+            self.db.query(DocumentChunk).filter(DocumentChunk.bot_id == bot_id).delete()
+            
+            # Reset chunk counts
+            for doc in documents:
+                doc.chunk_count = 0
+            
+            self.db.commit()
+            
+            # Process each document
+            processed_count = 0
+            total_chunks = 0
+            errors = []
+            
+            for document in documents:
+                try:
+                    logger.info(f"Reprocessing document: {document.filename}")
+                    result = await self.process_document(document.id, user_id)
+                    processed_count += 1
+                    total_chunks += result.get("chunks_created", 0)
+                    logger.info(f"Successfully reprocessed {document.filename}: {result.get('chunks_created', 0)} chunks")
+                    
+                except Exception as e:
+                    error_msg = f"Failed to reprocess {document.filename}: {str(e)}"
+                    logger.error(error_msg)
+                    errors.append(error_msg)
+            
+            result = {
+                "message": f"Reprocessed {processed_count} of {len(documents)} documents",
+                "documents_processed": processed_count,
+                "total_documents": len(documents),
+                "total_chunks": total_chunks,
+                "embedding_provider": bot.embedding_provider,
+                "embedding_model": bot.embedding_model,
+                "errors": errors
+            }
+            
+            logger.info(f"Completed reprocessing for bot {bot_id}: {result}")
+            return result
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error reprocessing documents for bot {bot_id}: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Document reprocessing failed: {str(e)}"
+            )
+    
     async def get_bot_document_stats(self, bot_id: UUID, user_id: UUID) -> Dict[str, Any]:
         """
         Get statistics about documents for a bot.
