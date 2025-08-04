@@ -3,17 +3,15 @@
  */
 import React, { useEffect, useRef } from 'react';
 import { useChatStore } from '../../stores/chatStore';
-import { chatService } from '../../services/chatService';
 import { chatWebSocketService } from '../../services/chatWebSocketService';
-import { authService } from '../../services/authService';
-import { useAuth } from '../../hooks/useAuth';
+import { useChatSession } from '../../hooks/useChatSession';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { SessionList } from './SessionList';
 import { ConnectionStatus } from './ConnectionStatus';
 import { TypingIndicator } from './TypingIndicator';
+import { ChatDiagnostics } from './ChatDiagnostics';
 import { ErrorBoundary, ChatErrorFallback } from '../common/ErrorBoundary';
-import { runWebSocketDiagnostics } from '../../utils/websocketDiagnostics';
 
 import { BotResponse } from '../../types/bot';
 
@@ -23,185 +21,83 @@ interface ChatWindowProps {
 }
 
 export const ChatWindow: React.FC<ChatWindowProps> = ({ bot, className = '' }) => {
-  const { user } = useAuth();
   const {
     currentSessionId,
-    currentBotId,
-    sessions,
     uiState,
-    setSessions,
     setCurrentBot,
-    setCurrentSession,
-    setLoading,
     setConnectionStatus,
-    getCurrentMessages
+    getCurrentMessages,
+    addMessage,
+    addTypingUser,
+    removeTypingUser
   } = useChatStore();
 
-  const isInitialized = useRef(false);
   const cleanupFunctions = useRef<(() => void)[]>([]);
+  const lastBotId = useRef<string | null>(null);
 
-  // Fallback to prevent infinite loading
+  // Use the improved session management hook
+  const {
+    sessions,
+    currentSession,
+    isLoading,
+    error,
+    selectSession
+  } = useChatSession({
+    botId: bot.id,
+    autoSelectFirst: true,
+    preloadMessages: true
+  });
+
+  // Set current bot in store
   useEffect(() => {
-    const fallbackTimer = setTimeout(() => {
-      if (uiState.isLoading) {
-        console.warn('Chat initialization taking too long, forcing completion');
-        setLoading(false);
+    setCurrentBot(bot.id);
+  }, [bot.id, setCurrentBot]);
+
+  // Set up WebSocket event listeners
+  useEffect(() => {
+    if (!bot.id) return;
+
+    console.log('ChatWindow: Setting up WebSocket event listeners for bot:', bot.id);
+
+    const unsubscribeChat = chatWebSocketService.onChatMessage((message) => {
+      // Handle incoming chat messages
+      if (message.bot_id === bot.id) {
+        addMessage(message.data.session_id, {
+          id: message.data.message_id,
+          session_id: message.data.session_id,
+          bot_id: message.bot_id,
+          user_id: message.data.user_id,
+          role: message.data.role,
+          content: message.data.content,
+          message_metadata: message.data.metadata,
+          created_at: message.data.timestamp,
+          status: 'sent'
+        });
       }
-    }, 10000); // 10 second fallback
-
-    return () => clearTimeout(fallbackTimer);
-  }, [uiState.isLoading, setLoading]);
-
-  // Initialize chat for the bot
-  useEffect(() => {
-    console.log('ChatWindow useEffect triggered', { 
-      botId: bot?.id, 
-      userId: user?.id, 
-      hasToken: !!authService.getAccessToken(),
-      isInitialized: isInitialized.current,
-      currentBotId 
     });
-    
-    const token = authService.getAccessToken();
-    if (!bot || !user || !token) {
-      console.log('Missing required data for chat initialization', { bot: !!bot, user: !!user, token: !!token });
-      return;
-    }
 
-    // Prevent multiple initializations for the same bot
-    if (isInitialized.current && currentBotId === bot.id) {
-      console.log('Chat already initialized for this bot, skipping');
-      return;
-    }
-
-    let isCancelled = false;
-
-    const initializeChat = async () => {
-      // Add a timeout to prevent hanging
-      const timeoutId = setTimeout(() => {
-        if (!isCancelled) {
-          console.error('Chat initialization timed out');
-          setLoading(false);
-          setConnectionStatus({
-            status: 'error',
-            error: 'Initialization timed out'
-          });
-        }
-      }, 15000); // 15 second timeout
-      try {
-        if (isCancelled) return;
-        
-        console.log('Starting chat initialization for bot:', bot.id);
-        setLoading(true);
-        setCurrentBot(bot.id);
-
-        // Load existing sessions for this bot
-        console.log('Loading sessions for bot:', bot.id);
-        try {
-          const botSessions = await chatService.getSessions(bot.id);
-          if (isCancelled) return;
-          
-          console.log('Loaded sessions:', botSessions.length);
-          setSessions(botSessions);
-        } catch (sessionError) {
-          console.error('Failed to load sessions:', sessionError);
-          // Continue with empty sessions rather than failing completely
-          setSessions([]);
-        }
-
-        // Connect to WebSocket only if not already connected to this bot
-        if (chatWebSocketService.getCurrentBotId() !== bot.id && !isCancelled) {
-          try {
-            console.log('Connecting to WebSocket for bot:', bot.id);
-            await chatWebSocketService.connectToBot(bot.id, token);
-            console.log('WebSocket connected successfully');
-          } catch (error) {
-            console.error('Failed to connect to WebSocket:', error);
-            if (!isCancelled) {
-              setConnectionStatus({
-                status: 'error',
-                error: 'Failed to connect to WebSocket'
-              });
-              // Run diagnostics to help debug the issue
-              await runWebSocketDiagnostics(bot.id, token);
-              // Don't throw the error - continue with initialization
-              // The chat can still work without real-time updates
-            }
-          }
-        }
-
-        if (isCancelled) return;
-
-        console.log('Setting up WebSocket event listeners');
-        // Set up WebSocket event listeners
-        const unsubscribeChat = chatWebSocketService.onChatMessage((message) => {
-          // Handle incoming chat messages
-          if (message.bot_id === bot.id) {
-            const { addMessage } = useChatStore.getState();
-            addMessage(message.data.session_id, {
-              id: message.data.message_id,
-              session_id: message.data.session_id,
-              bot_id: message.bot_id,
-              user_id: message.data.user_id,
-              role: message.data.role,
-              content: message.data.content,
-              message_metadata: message.data.metadata,
-              created_at: message.data.timestamp,
-              status: 'sent'
-            });
-          }
-        });
-
-        const unsubscribeTyping = chatWebSocketService.onTypingIndicator((indicator) => {
-          if (indicator.bot_id === bot.id) {
-            const { addTypingUser, removeTypingUser } = useChatStore.getState();
-            if (indicator.data.is_typing) {
-              addTypingUser(indicator.data.username);
-            } else {
-              removeTypingUser(indicator.data.username);
-            }
-          }
-        });
-
-        const unsubscribeConnection = chatWebSocketService.onConnectionStatus((status) => {
-          setConnectionStatus(status);
-        });
-
-        // Store cleanup functions
-        cleanupFunctions.current = [
-          unsubscribeChat,
-          unsubscribeTyping,
-          unsubscribeConnection
-        ];
-
-        console.log('Chat initialization completed successfully');
-        if (!isCancelled) {
-          isInitialized.current = true;
-        }
-
-      } catch (error) {
-        console.error('Failed to initialize chat:', error);
-        if (!isCancelled) {
-          setConnectionStatus({
-            status: 'error',
-            error: 'Failed to initialize chat'
-          });
-        }
-      } finally {
-        clearTimeout(timeoutId);
-        if (!isCancelled) {
-          console.log('Setting loading to false');
-          setLoading(false);
+    const unsubscribeTyping = chatWebSocketService.onTypingIndicator((indicator) => {
+      if (indicator.bot_id === bot.id) {
+        if (indicator.data.is_typing) {
+          addTypingUser(indicator.data.username);
+        } else {
+          removeTypingUser(indicator.data.username);
         }
       }
-    };
+    });
 
-    initializeChat();
+    const unsubscribeConnection = chatWebSocketService.onConnectionStatus((status) => {
+      setConnectionStatus(status);
+    });
 
-    // Cleanup on unmount or bot change
+    // Store cleanup functions
+    cleanupFunctions.current = [
+      unsubscribeChat,
+      unsubscribeTyping,
+      unsubscribeConnection
+    ];
+
     return () => {
-      isCancelled = true;
-      
       // Run cleanup functions
       cleanupFunctions.current.forEach(cleanup => {
         try {
@@ -211,41 +107,33 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ bot, className = '' }) =
         }
       });
       cleanupFunctions.current = [];
-      
-      // Only disconnect if we're changing bots or unmounting
-      if (currentBotId !== bot.id) {
-        chatWebSocketService.disconnect();
-        isInitialized.current = false;
-      }
     };
-  }, [bot?.id, user?.id]);
-
-  // Auto-select first session if none selected
-  useEffect(() => {
-    if (sessions.length > 0 && !currentSessionId && currentBotId === bot.id) {
-      setCurrentSession(sessions[0].id);
-    }
-  }, [sessions, currentSessionId, currentBotId, bot.id]);
+  }, [bot.id, addMessage, addTypingUser, removeTypingUser, setConnectionStatus]);
 
   const currentMessages = getCurrentMessages();
 
-  if (uiState.isLoading) {
+  if (isLoading) {
     return (
       <div className={`flex items-center justify-center h-96 ${className}`}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <span className="text-gray-600">Loading chat...</span>
-          <div className="mt-4">
-            <button 
-              onClick={() => {
-                console.log('Force stopping loading state');
-                setLoading(false);
-              }}
-              className="text-sm text-blue-600 hover:text-blue-800 underline"
-            >
-              Taking too long? Click here to continue
-            </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={`flex items-center justify-center h-96 ${className}`}>
+        <div className="text-center text-red-600">
+          <div className="mb-4">
+            <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 18.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
           </div>
+          <p className="text-lg font-medium">Chat Error</p>
+          <p className="text-sm mt-1">{error}</p>
         </div>
       </div>
     );
@@ -260,11 +148,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ bot, className = '' }) =
             <h3 className="text-lg font-semibold text-gray-900">
               Chat with {bot.name}
             </h3>
-            <div className="mt-2">
+            <div className="mt-2 space-y-2">
               <ConnectionStatus />
+              <ChatDiagnostics botId={bot.id} />
             </div>
           </div>
-          <SessionList bot={bot} />
+          <SessionList bot={bot} sessions={sessions} onSelectSession={selectSession} />
         </div>
 
         {/* Chat area */}

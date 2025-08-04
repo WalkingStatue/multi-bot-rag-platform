@@ -119,9 +119,13 @@ export class BotService {
         const dynamicModels = await apiKeyService.getProviderModels(providerKey);
         models = dynamicModels.models;
         modelsSource = dynamicModels.source;
-      } catch (error) {
+      } catch (error: any) {
         // Use static models if dynamic fetch fails
-        console.warn(`Failed to fetch dynamic models for ${providerKey}, using static models`);
+        if (error.response?.status === 400) {
+          console.log(`No API key configured for ${providerKey}, using static models`);
+        } else {
+          console.warn(`Failed to fetch dynamic models for ${providerKey}, using static models`);
+        }
       }
       
       // Convert model strings to model objects
@@ -331,8 +335,8 @@ export class BotService {
       }
     }
 
-    if ('system_prompt' in config && config.system_prompt) {
-      if (config.system_prompt.length < 1) {
+    if ('system_prompt' in config) {
+      if (!config.system_prompt || config.system_prompt.trim().length < 1) {
         errors.push('System prompt is required');
       }
     }

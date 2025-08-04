@@ -25,9 +25,10 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const [lastSentTime, setLastSentTime] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<number | null>(null);
+  const sendingRef = useRef(false);
   
   // Minimum time between messages to prevent rate limiting (in milliseconds)
-  const MIN_MESSAGE_INTERVAL = 1000;
+  const MIN_MESSAGE_INTERVAL = 3000; // Increased to 3 seconds
   
   const { addMessage, updateMessage, setTyping } = useChatStore();
 
@@ -62,21 +63,34 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!message.trim() || isSending || !user) return;
+    if (!message.trim() || isSending || !user || sendingRef.current) return;
 
     // Check rate limiting
     const now = Date.now();
     const timeSinceLastMessage = now - lastSentTime;
     if (timeSinceLastMessage < MIN_MESSAGE_INTERVAL) {
       const waitTime = MIN_MESSAGE_INTERVAL - timeSinceLastMessage;
-      console.log(`Rate limiting: waiting ${waitTime}ms before sending`);
-      setTimeout(() => handleSubmit(e), waitTime);
+      console.log(`Rate limiting: waiting ${Math.ceil(waitTime / 1000)} seconds before sending`);
+      
+      // Show user feedback about rate limiting
+      const errorMessage: MessageWithStatus = {
+        id: `rate-limit-${Date.now()}`,
+        session_id: sessionId,
+        bot_id: botId,
+        user_id: 'system',
+        role: 'system',
+        content: `Please wait ${Math.ceil(waitTime / 1000)} seconds before sending another message.`,
+        created_at: new Date().toISOString(),
+        status: 'sent'
+      };
+      addMessage(sessionId, errorMessage);
       return;
     }
 
     const messageContent = message.trim();
     setMessage('');
     setIsSending(true);
+    sendingRef.current = true;
     setLastSentTime(now);
 
     // Stop typing indicator
@@ -150,6 +164,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       addMessage(sessionId, errorMessage);
     } finally {
       setIsSending(false);
+      sendingRef.current = false;
     }
   };
 

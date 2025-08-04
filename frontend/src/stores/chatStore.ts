@@ -19,6 +19,7 @@ interface ChatStore {
   currentSessionId: string | null;
   currentBotId: string | null;
   uiState: ChatUIState;
+  lastError: string | null;
 
   // Actions
   setSessions: (sessions: ConversationSession[]) => void;
@@ -42,6 +43,8 @@ interface ChatStore {
   setConnectionStatus: (status: ConnectionStatus) => void;
   setSearchQuery: (query: string) => void;
   setSearchResults: (results: ConversationSearchResult[]) => void;
+  setError: (error: string | null) => void;
+  clearError: () => void;
   
   // Computed
   getCurrentSession: () => ConversationSession | null;
@@ -57,6 +60,7 @@ export const useChatStore = create<ChatStore>()(
       messages: {},
       currentSessionId: null,
       currentBotId: null,
+      lastError: null,
       uiState: {
         isLoading: false,
         isTyping: false,
@@ -199,6 +203,9 @@ export const useChatStore = create<ChatStore>()(
       setSearchResults: (results) => set((state) => ({
         uiState: { ...state.uiState, searchResults: results }
       })),
+
+      setError: (error) => set({ lastError: error }),
+      clearError: () => set({ lastError: null }),
 
       // Computed getters
       getCurrentSession: () => {

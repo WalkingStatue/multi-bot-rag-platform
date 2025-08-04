@@ -7,6 +7,7 @@ import { connectionHealthMonitor } from '../utils/connectionHealth';
 export class ChatWebSocketService {
   private socket: WebSocket | null = null;
   private currentBotId: string | null = null;
+  private currentSessionId: string | null = null;
   private typingTimeout: number | null = null;
   private pingInterval: number | null = null;
   private listeners: Map<string, Set<(data: any) => void>> = new Map();
@@ -16,67 +17,65 @@ export class ChatWebSocketService {
   private token: string | null = null;
   private connectionTimeout: number | null = null;
   private lastConnectionAttempt = 0;
-  private connectionDebounceMs = 1000; // Prevent connections within 1 second
+  private connectionDebounceMs = 500; // Reduced debounce time
+  private isConnecting = false;
+  private connectionPromise: Promise<void> | null = null;
+  private sessionSyncQueue: Array<{ sessionId: string; callback: () => void }> = [];
 
   /**
    * Connect to chat WebSocket for a specific bot
    */
-  async connectToBot(botId: string, token: string): Promise<void> {
+  async connectToBot(botId: string, token: string, sessionId?: string): Promise<void> {
+    // Return existing connection promise if already connecting
+    if (this.connectionPromise && this.isConnecting) {
+      console.log('Connection already in progress, waiting for completion');
+      return this.connectionPromise;
+    }
+
+    // If already connected to the same bot, just sync session
+    if (this.socket?.readyState === WebSocket.OPEN && this.currentBotId === botId) {
+      console.log('Already connected to bot:', botId);
+      if (sessionId && sessionId !== this.currentSessionId) {
+        this.syncToSession(sessionId);
+      }
+      return Promise.resolve();
+    }
+
+    // Debounce connection attempts
+    const now = Date.now();
+    if (now - this.lastConnectionAttempt < this.connectionDebounceMs && this.currentBotId === botId) {
+      console.log('Connection attempt debounced, too soon since last attempt');
+      return Promise.resolve();
+    }
+    this.lastConnectionAttempt = now;
+
+    this.connectionPromise = this.performConnection(botId, token, sessionId);
+    return this.connectionPromise;
+  }
+
+  /**
+   * Perform the actual WebSocket connection
+   */
+  private async performConnection(botId: string, token: string, sessionId?: string): Promise<void> {
     return new Promise<void>(async (resolve, reject) => {
-      // Debounce connection attempts
-      const now = Date.now();
-      if (now - this.lastConnectionAttempt < this.connectionDebounceMs) {
-        console.log('Connection attempt debounced, too soon since last attempt');
-        resolve();
-        return;
-      }
-      this.lastConnectionAttempt = now;
+      this.isConnecting = true;
 
-      // If already connected to the same bot, don't reconnect
-      if (this.socket?.readyState === WebSocket.OPEN && this.currentBotId === botId) {
-        console.log('Already connected to bot:', botId);
-        resolve();
-        return;
-      }
-
-      // If connecting to the same bot but connection is not open, wait a bit
-      if (this.currentBotId === botId && this.socket?.readyState === WebSocket.CONNECTING) {
-        console.log('Connection already in progress for bot:', botId);
-        resolve();
-        return;
-      }
-
-    // Disconnect existing connection if any
-    this.disconnect();
-
-    this.currentBotId = botId;
-    this.token = token;
-    
-    const wsUrl = (import.meta as any).env?.VITE_WS_URL || 'ws://localhost:8000';
-    const chatUrl = `${wsUrl}/api/ws/chat/${botId}?token=${encodeURIComponent(token)}`;
-    
-    console.log('Attempting to connect to chat WebSocket:', chatUrl.replace(token, '[TOKEN]'));
-    
-      // Check if backend is reachable before attempting WebSocket connection
-      const checkHealth = async () => {
-        try {
-          const apiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
-          const healthResponse = await fetch(`${apiUrl}/health`, {
-            method: 'GET',
-            signal: AbortSignal.timeout(5000)
-          });
-          
-          if (!healthResponse.ok) {
-            throw new Error(`Backend not available: ${healthResponse.status}`);
-          }
-        } catch (error) {
-          console.log('Backend health check failed, attempting WebSocket connection anyway:', error);
-        }
-      };
-      
-      await checkHealth();
-      
       try {
+        // Disconnect existing connection if any
+        this.disconnect();
+
+        this.currentBotId = botId;
+        this.currentSessionId = sessionId || null;
+        this.token = token;
+        
+        const wsUrl = (import.meta as any).env?.VITE_WS_URL || 'ws://localhost:8000';
+        const chatUrl = `${wsUrl}/api/ws/chat/${botId}?token=${encodeURIComponent(token)}`;
+        
+        console.log('Attempting to connect to chat WebSocket:', chatUrl.replace(token, '[TOKEN]'));
+        
+        // Check if backend is reachable before attempting WebSocket connection
+        await this.checkBackendHealth();
+        
         this.socket = new WebSocket(chatUrl);
         this.setupEventHandlers(resolve, reject);
         
@@ -94,14 +93,65 @@ export class ChatWebSocketService {
         console.error('Failed to create WebSocket connection:', error);
         this.notifyListeners('connection', { status: 'error', error: 'Failed to create connection' });
         reject(error);
+      } finally {
+        this.isConnecting = false;
+        this.connectionPromise = null;
       }
     });
+  }
+
+  /**
+   * Check backend health before attempting WebSocket connection
+   */
+  private async checkBackendHealth(): Promise<void> {
+    try {
+      const apiUrl = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
+      const healthResponse = await fetch(`${apiUrl}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (!healthResponse.ok) {
+        throw new Error(`Backend not available: ${healthResponse.status}`);
+      }
+    } catch (error) {
+      console.log('Backend health check failed, attempting WebSocket connection anyway:', error);
+    }
+  }
+
+  /**
+   * Sync WebSocket to a specific session
+   */
+  syncToSession(sessionId: string): void {
+    console.log('Syncing WebSocket to session:', sessionId);
+    this.currentSessionId = sessionId;
+    
+    // If connected, send session sync message
+    if (this.isConnected()) {
+      this.send({
+        type: 'session_sync',
+        data: { session_id: sessionId }
+      });
+    } else {
+      // Queue session sync for when connection is established
+      this.sessionSyncQueue.push({
+        sessionId,
+        callback: () => {
+          this.send({
+            type: 'session_sync',
+            data: { session_id: sessionId }
+          });
+        }
+      });
+    }
   }
 
   /**
    * Disconnect from current bot chat
    */
   disconnect(): void {
+    console.log('Disconnecting WebSocket service');
+    
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
       this.pingInterval = null;
@@ -118,15 +168,27 @@ export class ChatWebSocketService {
     }
     
     if (this.socket) {
-      this.socket.close();
+      this.socket.close(1000, 'Client disconnect');
       this.socket = null;
     }
     
-    this.listeners.clear();
+    // Clear state but preserve listeners for reconnection
     this.currentBotId = null;
+    this.currentSessionId = null;
     this.reconnectAttempts = 0;
     this.token = null;
+    this.isConnecting = false;
+    this.connectionPromise = null;
+    this.sessionSyncQueue = [];
     this.lastConnectionAttempt = 0; // Reset debounce
+  }
+
+  /**
+   * Clean disconnect that also clears listeners
+   */
+  cleanDisconnect(): void {
+    this.disconnect();
+    this.listeners.clear();
   }
 
   /**
@@ -225,6 +287,13 @@ export class ChatWebSocketService {
   }
 
   /**
+   * Get current session ID
+   */
+  getCurrentSessionId(): string | null {
+    return this.currentSessionId;
+  }
+
+  /**
    * Setup event handlers for WebSocket
    */
   private setupEventHandlers(resolve?: () => void, reject?: (error: Error) => void): void {
@@ -241,6 +310,10 @@ export class ChatWebSocketService {
       
       this.reconnectAttempts = 0;
       this.notifyListeners('connection', { status: 'connected' });
+      
+      // Process queued session syncs
+      this.processSessionSyncQueue();
+      
       // Start ping with delay to let connection stabilize
       this.startPingInterval();
       
@@ -394,9 +467,30 @@ export class ChatWebSocketService {
     
     setTimeout(async () => {
       if (this.token && this.currentBotId && connectionHealthMonitor.isHealthy()) {
-        await this.connectToBot(this.currentBotId, this.token);
+        try {
+          await this.connectToBot(this.currentBotId, this.token, this.currentSessionId);
+        } catch (error) {
+          console.error('Reconnection attempt failed:', error);
+          // Continue with normal reconnection logic
+          if (this.reconnectAttempts < this.maxReconnectAttempts) {
+            this.handleReconnect();
+          }
+        }
       }
     }, delay);
+  }
+
+  /**
+   * Process queued session sync operations
+   */
+  private processSessionSyncQueue(): void {
+    while (this.sessionSyncQueue.length > 0) {
+      const syncOp = this.sessionSyncQueue.shift();
+      if (syncOp) {
+        console.log('Processing queued session sync:', syncOp.sessionId);
+        syncOp.callback();
+      }
+    }
   }
 
   /**

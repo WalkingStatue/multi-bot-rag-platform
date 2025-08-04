@@ -90,6 +90,22 @@ async def websocket_chat_endpoint(
                         "timestamp": message.get("timestamp")
                     }))
                 
+                elif message_type == "session_sync":
+                    # Handle session synchronization
+                    session_id = message.get("data", {}).get("session_id")
+                    if session_id:
+                        logger.info(f"User {user.id} synced to session {session_id} for bot {bot_id}")
+                        await websocket.send_text(json.dumps({
+                            "type": "session_synced",
+                            "data": {
+                                "session_id": session_id,
+                                "bot_id": bot_id,
+                                "timestamp": message.get("timestamp")
+                            }
+                        }))
+                    else:
+                        logger.warning("Session sync message missing session_id")
+                
                 else:
                     logger.warning(f"Unknown message type: {message_type}")
                     

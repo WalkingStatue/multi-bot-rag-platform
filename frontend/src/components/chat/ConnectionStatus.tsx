@@ -28,7 +28,12 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
           break;
         case 'error':
           setStatus('error');
-          setMessage(statusData.error || 'Connection error');
+          const errorMsg = statusData.error || 'Connection error';
+          if (errorMsg.includes('REST API')) {
+            setMessage('Using REST API (WebSocket unavailable)');
+          } else {
+            setMessage(errorMsg);
+          }
           break;
         case 'failed':
           setStatus('error');
@@ -103,9 +108,10 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({
           <button
             onClick={async () => {
               const botId = chatWebSocketService.getCurrentBotId();
+              const sessionId = chatWebSocketService.getCurrentSessionId();
               const token = localStorage.getItem('access_token');
               if (botId && token) {
-                await chatWebSocketService.connectToBot(botId, token);
+                await chatWebSocketService.connectToBot(botId, token, sessionId || undefined);
               }
             }}
             className="text-xs underline hover:no-underline"

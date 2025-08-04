@@ -10,22 +10,24 @@ import { formatDistanceToNow } from 'date-fns';
 
 interface SessionListProps {
   bot: BotResponse;
+  sessions: ConversationSession[];
+  onSelectSession: (sessionId: string) => Promise<void>;
   className?: string;
 }
 
 export const SessionList: React.FC<SessionListProps> = ({ 
-  bot, 
+  bot,
+  sessions,
+  onSelectSession,
   className = '' 
 }) => {
   const {
-    sessions,
     currentSessionId,
     addSession,
     updateSession,
     removeSession,
     setCurrentSession,
-    setMessages,
-    setLoading
+    setMessages
   } = useChatStore();
 
   const [isCreating, setIsCreating] = useState(false);
@@ -50,19 +52,7 @@ export const SessionList: React.FC<SessionListProps> = ({
 
   const handleSelectSession = async (session: ConversationSession) => {
     if (session.id === currentSessionId) return;
-
-    setCurrentSession(session.id);
-    
-    // Load messages for this session
-    try {
-      setLoading(true);
-      const messages = await chatService.getSessionMessages(session.id);
-      setMessages(session.id, messages.map(msg => ({ ...msg, status: 'sent' as const })));
-    } catch (error) {
-      console.error('Failed to load session messages:', error);
-    } finally {
-      setLoading(false);
-    }
+    await onSelectSession(session.id);
   };
 
   const handleEditTitle = (session: ConversationSession) => {

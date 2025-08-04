@@ -134,4 +134,13 @@ export interface ChatUIState {
 export interface MessageWithStatus extends Message {
   status?: 'sending' | 'sent' | 'error';
   tempId?: string;
+  error?: ChatError;
+}
+
+export interface ChatError {
+  type: 'rate_limit' | 'api_error' | 'network_error' | 'validation_error' | 'unknown';
+  message: string;
+  provider?: string;
+  retryable?: boolean;
+  retryAfter?: number; // seconds
 }

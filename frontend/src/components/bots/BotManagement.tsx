@@ -105,9 +105,31 @@ export const BotManagement: React.FC = () => {
       await loadBots(); // Reload the list
     } catch (error: any) {
       console.error('Failed to save bot:', error);
+      
+      // Handle validation errors (422)
+      let errorMessage = `Failed to ${viewMode === 'create' ? 'create' : 'update'} bot`;
+      
+      if (error.response?.status === 422 && error.response?.data?.detail) {
+        const detail = error.response.data.detail;
+        if (Array.isArray(detail)) {
+          // Handle Pydantic validation errors
+          const validationErrors = detail.map((err: any) => {
+            if (typeof err === 'object' && err.msg) {
+              return `${err.loc?.join(' → ') || 'Field'}: ${err.msg}`;
+            }
+            return String(err);
+          });
+          errorMessage = validationErrors.join('; ');
+        } else if (typeof detail === 'string') {
+          errorMessage = detail;
+        }
+      } else if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      }
+      
       setMessage({
         type: 'error',
-        text: error.response?.data?.detail || `Failed to ${viewMode === 'create' ? 'create' : 'update'} bot`,
+        text: errorMessage,
       });
     }
   };

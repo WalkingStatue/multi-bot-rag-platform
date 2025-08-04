@@ -11,8 +11,79 @@ import {
   ChatResponse,
   ConversationSearchResult,
   ConversationAnalytics,
-  ConversationExport
+  ConversationExport,
+  ChatError
 } from '../types/chat';
+
+/**
+ * Parse API error into a structured ChatError
+ */
+function parseApiError(error: any): ChatError {
+  const response = error.response;
+  const status = response?.status;
+  const data = response?.data;
+  const detail = data?.detail || error.message || 'Unknown error occurred';
+
+  // Handle rate limit errors
+  if (status === 429 || detail.includes('rate limit')) {
+    const isOpenRouter = detail.includes('OpenRouter');
+    return {
+      type: 'rate_limit',
+      message: isOpenRouter 
+        ? 'OpenRouter API rate limit exceeded. Please wait before sending another message.'
+        : 'Rate limit exceeded. Please wait before trying again.',
+      provider: isOpenRouter ? 'openrouter' : undefined,
+      retryable: true,
+      retryAfter: isOpenRouter ? 30 : 10 // OpenRouter typically needs longer waits
+    };
+  }
+
+  // Handle API key errors
+  if (status === 401 || detail.includes('API key') || detail.includes('authentication')) {
+    return {
+      type: 'api_error',
+      message: 'API authentication failed. Please check your API keys in bot settings.',
+      retryable: false
+    };
+  }
+
+  // Handle validation errors
+  if (status === 400 || status === 422) {
+    return {
+      type: 'validation_error',
+      message: detail.includes('validation') ? detail : 'Invalid request. Please check your input.',
+      retryable: false
+    };
+  }
+
+  // Handle network errors
+  if (!response || error.code === 'NETWORK_ERROR' || error.code === 'ECONNABORTED') {
+    return {
+      type: 'network_error',
+      message: 'Network error. Please check your connection and try again.',
+      retryable: true,
+      retryAfter: 5
+    };
+  }
+
+  // Handle server errors
+  if (status >= 500) {
+    return {
+      type: 'api_error',
+      message: 'Server error. Please try again in a moment.',
+      retryable: true,
+      retryAfter: 10
+    };
+  }
+
+  // Default unknown error
+  return {
+    type: 'unknown',
+    message: detail || 'An unexpected error occurred. Please try again.',
+    retryable: true,
+    retryAfter: 5
+  };
+}
 
 export class ChatService {
   /**
@@ -88,8 +159,15 @@ export class ChatService {
    * Send a chat message to a bot
    */
   async sendMessage(botId: string, chatRequest: ChatRequest): Promise<ChatResponse> {
-    const response = await apiClient.post(`/conversations/bots/${botId}/chat`, chatRequest);
-    return response.data;
+    try {
+      const response = await apiClient.post(`/conversations/bots/${botId}/chat`, chatRequest);
+      return response.data;
+    } catch (error) {
+      const chatError = parseApiError(error);
+      // Attach the parsed error to the original error for upstream handling
+      (error as any).chatError = chatError;
+      throw error;
+    }
   }
 
   /**

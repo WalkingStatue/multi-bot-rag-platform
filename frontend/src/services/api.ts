@@ -66,17 +66,33 @@ class APIClient {
         }
 
         // Handle 429 Too Many Requests - rate limiting
-        if (error.response?.status === 429 && !originalRequest._retryCount) {
+        if (error.response?.status === 429) {
+          const errorDetail = error.response?.data?.detail || '';
           originalRequest._retryCount = (originalRequest._retryCount || 0) + 1;
           
-          if (originalRequest._retryCount <= 3) {
+          // Check if this is an OpenRouter rate limit error
+          const isOpenRouterRateLimit = errorDetail.includes('OpenRouter API rate limit exceeded');
+          
+          // For OpenRouter rate limits, use longer delays and fewer retries
+          const maxRetries = isOpenRouterRateLimit ? 1 : 2;
+          const baseDelay = isOpenRouterRateLimit ? 10000 : 5000; // 10s for OpenRouter, 5s for others
+          
+          if (originalRequest._retryCount <= maxRetries) {
             const retryAfter = error.response.headers['retry-after'];
-            const delay = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, originalRequest._retryCount) * 1000;
+            const delay = retryAfter ? parseInt(retryAfter) * 1000 : baseDelay;
             
-            console.log(`Rate limited. Retrying after ${delay}ms (attempt ${originalRequest._retryCount}/3)`);
+            console.log(`Rate limited${isOpenRouterRateLimit ? ' (OpenRouter)' : ''}. Retrying after ${delay}ms (attempt ${originalRequest._retryCount}/${maxRetries})`);
             
             await new Promise(resolve => setTimeout(resolve, delay));
             return this.client(originalRequest);
+          } else {
+            console.log(`Rate limit retry exhausted${isOpenRouterRateLimit ? ' (OpenRouter)' : ''}, failing request`);
+            
+            // Enhance error message for OpenRouter rate limits
+            if (isOpenRouterRateLimit) {
+              error.isOpenRouterRateLimit = true;
+              error.userMessage = 'OpenRouter API rate limit exceeded. Please wait a moment before trying again.';
+            }
           }
         }
 
