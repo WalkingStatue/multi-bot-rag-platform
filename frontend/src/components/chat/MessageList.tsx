@@ -19,12 +19,38 @@ export const MessageList: React.FC<MessageListProps> = ({
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ 
-        behavior: 'smooth',
-        block: 'end'
-      });
-    }
+    const scrollToBottom = () => {
+      if (containerRef.current) {
+        const container = containerRef.current;
+        
+        console.log('MessageList scroll before:', {
+          scrollTop: container.scrollTop,
+          scrollHeight: container.scrollHeight,
+          clientHeight: container.clientHeight,
+          messagesCount: messages.length
+        });
+        
+        // Force scroll to bottom
+        container.scrollTop = container.scrollHeight;
+        
+        console.log('MessageList scroll after:', {
+          scrollTop: container.scrollTop,
+          scrollHeight: container.scrollHeight,
+          clientHeight: container.clientHeight
+        });
+        
+        // Also try using scrollTo for better browser compatibility
+        container.scrollTo({
+          top: container.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
+    };
+
+    // Use setTimeout to ensure DOM is fully updated
+    const timeoutId = setTimeout(scrollToBottom, 100);
+    
+    return () => clearTimeout(timeoutId);
   }, [messages]);
 
   if (messages.length === 0) {
@@ -46,7 +72,7 @@ export const MessageList: React.FC<MessageListProps> = ({
   return (
     <div 
       ref={containerRef}
-      className={`flex-1 overflow-y-auto p-4 space-y-4 ${className}`}
+      className={`flex-1 overflow-y-auto p-4 space-y-4 min-h-0 max-h-full chat-messages ${className}`}
     >
       {messages.map((message, index) => {
         const isLastMessage = index === messages.length - 1;

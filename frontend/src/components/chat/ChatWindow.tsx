@@ -11,6 +11,7 @@ import { SessionList } from './SessionList';
 import { ConnectionStatus } from './ConnectionStatus';
 import { TypingIndicator } from './TypingIndicator';
 import { ChatDiagnostics } from './ChatDiagnostics';
+import { ScrollDebug } from './ScrollDebug';
 import { ErrorBoundary, ChatErrorFallback } from '../common/ErrorBoundary';
 
 import { BotResponse } from '../../types/bot';
@@ -33,12 +34,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ bot, className = '' }) =
   } = useChatStore();
 
   const cleanupFunctions = useRef<(() => void)[]>([]);
-  const lastBotId = useRef<string | null>(null);
 
   // Use the improved session management hook
   const {
     sessions,
-    currentSession,
     isLoading,
     error,
     selectSession
@@ -141,9 +140,9 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ bot, className = '' }) =
 
   return (
     <ErrorBoundary fallback={<ChatErrorFallback error="Chat failed to load" />}>
-      <div className={`flex h-full bg-white rounded-lg shadow-lg ${className}`}>
+      <div className={`flex h-full bg-white rounded-lg shadow-lg overflow-hidden chat-container ${className}`}>
         {/* Session sidebar */}
-        <div className="w-1/4 border-r border-gray-200 flex flex-col">
+        <div className="w-1/4 border-r border-gray-200 flex flex-col min-h-0">
           <div className="p-4 border-b border-gray-200">
             <h3 className="text-lg font-semibold text-gray-900">
               Chat with {bot.name}
@@ -151,18 +150,23 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ bot, className = '' }) =
             <div className="mt-2 space-y-2">
               <ConnectionStatus />
               <ChatDiagnostics botId={bot.id} />
+              <ScrollDebug />
             </div>
           </div>
           <SessionList bot={bot} sessions={sessions} onSelectSession={selectSession} />
         </div>
 
         {/* Chat area */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-h-0">
           {currentSessionId ? (
             <ErrorBoundary fallback={<ChatErrorFallback error="Chat messages failed to load" />}>
-              <MessageList messages={currentMessages} />
-              <TypingIndicator users={uiState.typingUsers} />
-              <MessageInput botId={bot.id} sessionId={currentSessionId} />
+              <div className="flex-1 flex flex-col min-h-0">
+                <MessageList messages={currentMessages} />
+                <TypingIndicator users={uiState.typingUsers} />
+                <div className="flex-shrink-0">
+                  <MessageInput botId={bot.id} sessionId={currentSessionId} />
+                </div>
+              </div>
             </ErrorBoundary>
           ) : (
             <div className="flex-1 flex items-center justify-center text-gray-500">

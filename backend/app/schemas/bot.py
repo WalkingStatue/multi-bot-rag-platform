@@ -149,3 +149,88 @@ class CollaboratorInviteResponse(BaseModel):
     message: str
     user_id: Optional[uuid.UUID] = None
     permission: Optional[BotPermissionResponse] = None
+
+
+# Embedding Migration schemas
+class EmbeddingValidationRequest(BaseModel):
+    """Schema for embedding validation request."""
+    provider: str = Field(..., pattern="^(openai|gemini|anthropic|local)$")
+    model: str = Field(..., max_length=100)
+
+
+class EmbeddingValidationResponse(BaseModel):
+    """Schema for embedding validation response."""
+    compatible: bool
+    issues: List[str] = []
+    recommendations: List[str] = []
+    migration_required: bool
+    current_config: Optional[Dict[str, Any]] = None
+    target_config: Optional[Dict[str, Any]] = None
+
+
+class MigrationEstimateRequest(BaseModel):
+    """Schema for migration time estimation request."""
+    batch_size: int = Field(50, ge=1, le=500)
+
+
+class MigrationEstimateResponse(BaseModel):
+    """Schema for migration time estimation response."""
+    total_chunks: int
+    total_batches: int
+    estimated_time_seconds: int
+    estimated_time_human: str
+    batch_size: int
+    error: Optional[str] = None
+
+
+class MigrationStartRequest(BaseModel):
+    """Schema for starting migration."""
+    provider: str = Field(..., pattern="^(openai|gemini|anthropic|local)$")
+    model: str = Field(..., max_length=100)
+    batch_size: int = Field(50, ge=1, le=500)
+
+
+class MigrationProgressResponse(BaseModel):
+    """Schema for migration progress response."""
+    migration_id: str
+    bot_id: str
+    status: str
+    phase: str
+    progress: Dict[str, Any]
+    timing: Dict[str, Any]
+    rollback_available: bool
+    error_message: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class MigrationStatusResponse(BaseModel):
+    """Schema for migration status response."""
+    migration_id: Optional[str] = None
+    status: str
+    phase: Optional[str] = None
+    progress: Optional[Dict[str, Any]] = None
+    start_time: Optional[float] = None
+    last_update: Optional[float] = None
+    error_message: Optional[str] = None
+    rollback_available: bool = False
+
+
+class DimensionInfoResponse(BaseModel):
+    """Schema for dimension information response."""
+    provider: str
+    model: str
+    dimension: int
+    compatible_providers: List[str] = []
+    migration_required: bool
+
+
+class ActiveMigrationsResponse(BaseModel):
+    """Schema for active migrations response."""
+    active_migrations: Dict[str, Dict[str, Any]]
+    total_count: int
+
+
+class MigrationActionResponse(BaseModel):
+    """Schema for migration action responses (cancel, rollback)."""
+    message: str
+    success: bool = True

@@ -21,6 +21,8 @@ from ..models.bot import Bot
 from ..services.permission_service import PermissionService
 from ..services.embedding_service import EmbeddingProviderService
 from ..services.vector_store import VectorService
+from ..services.vector_collection_manager import VectorCollectionManager
+from ..models.collection_metadata import CollectionMetadata
 from ..utils.text_processing import DocumentProcessor, TextChunk
 
 logger = logging.getLogger(__name__)
@@ -34,7 +36,8 @@ class DocumentService:
         db: Session,
         permission_service: PermissionService = None,
         embedding_service: EmbeddingProviderService = None,
-        vector_service: VectorService = None
+        vector_service: VectorService = None,
+        collection_manager: VectorCollectionManager = None
     ):
         """
         Initialize document service.
@@ -44,26 +47,43 @@ class DocumentService:
             permission_service: Permission service instance
             embedding_service: Embedding service instance
             vector_service: Vector service instance
+            collection_manager: Vector collection manager instance
         """
         self.db = db
         self.permission_service = permission_service or PermissionService(db)
         self.embedding_service = embedding_service or EmbeddingProviderService()
+        self.collection_manager = collection_manager or VectorCollectionManager(db)
         
         # Initialize vector service
         self.vector_service = vector_service or VectorService()
         logger.info("Vector service initialized successfully")
         
-        # Initialize document processor with configurable settings
+        # Initialize document processor with configurable settings including OCR
         try:
+            from ..core.ocr_config import ocr_settings
+            
             self.processor = DocumentProcessor(
                 chunk_size=getattr(settings, 'chunk_size', 1000),
                 chunk_overlap=getattr(settings, 'chunk_overlap', 200),
-                max_file_size=getattr(settings, 'max_file_size', 50 * 1024 * 1024)
+                max_file_size=getattr(settings, 'max_file_size', 50 * 1024 * 1024),
+                enable_ocr=ocr_settings.ocr_enabled,
+                ocr_language=ocr_settings.ocr_default_language
             )
-            logger.info("DocumentProcessor initialized successfully")
+            logger.info(f"DocumentProcessor initialized successfully with OCR support (enabled: {ocr_settings.ocr_enabled})")
         except Exception as e:
             logger.error(f"Failed to initialize DocumentProcessor: {e}")
-            self.processor = None
+            # Fallback to basic processor without OCR
+            try:
+                self.processor = DocumentProcessor(
+                    chunk_size=getattr(settings, 'chunk_size', 1000),
+                    chunk_overlap=getattr(settings, 'chunk_overlap', 200),
+                    max_file_size=getattr(settings, 'max_file_size', 50 * 1024 * 1024),
+                    enable_ocr=False
+                )
+                logger.warning("Initialized DocumentProcessor without OCR support as fallback")
+            except Exception as fallback_error:
+                logger.error(f"Failed to initialize fallback DocumentProcessor: {fallback_error}")
+                self.processor = None
         
         # Ensure upload directory exists
         try:
@@ -208,8 +228,8 @@ class DocumentService:
             with open(file_path, 'rb') as f:
                 file_content = f.read()
             
-            # Process document through pipeline
-            chunks, doc_metadata = self.processor.process_document(
+            # Process document through pipeline with retry logic
+            chunks, doc_metadata = await self._process_document_with_retry(
                 file_content=file_content,
                 filename=document.filename,
                 document_id=str(document_id),
@@ -273,16 +293,50 @@ class DocumentService:
                 )
                 db_chunks.append(db_chunk)
             
-            # Ensure vector collection exists for this bot
+            # Ensure vector collection exists for this bot with proper validation
             if self.vector_service and vector_chunks:
                 # Get embedding dimension from the first embedding
                 embedding_dimension = len(embeddings[0]) if embeddings else 768
                 
-                # Initialize collection if it doesn't exist
-                await self.vector_service.initialize_bot_collection(
-                    str(document.bot_id), 
-                    embedding_dimension
+                # Prepare embedding configuration
+                embedding_config = {
+                    "provider": embedding_provider,
+                    "model": embedding_model,
+                    "dimension": embedding_dimension
+                }
+                
+                # Ensure collection exists with proper configuration
+                collection_result = await self.collection_manager.ensure_collection_exists(
+                    document.bot_id, embedding_config
                 )
+                
+                if not collection_result.success:
+                    logger.error(f"Failed to ensure collection exists for bot {document.bot_id}: {collection_result.error}")
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail=f"Failed to initialize vector collection: {collection_result.error}"
+                    )
+                
+                # Update or create collection metadata if needed
+                collection_metadata = self.db.query(CollectionMetadata).filter(
+                    CollectionMetadata.bot_id == document.bot_id
+                ).first()
+                
+                if not collection_metadata:
+                    collection_metadata = CollectionMetadata(
+                        bot_id=document.bot_id,
+                        collection_name=str(document.bot_id),
+                        embedding_provider=embedding_provider,
+                        embedding_model=embedding_model,
+                        embedding_dimension=embedding_dimension,
+                        status="active",
+                        points_count=0
+                    )
+                    self.db.add(collection_metadata)
+                    logger.info(f"Created collection metadata for bot {document.bot_id}")
+                else:
+                    # Update points count (will be updated after successful storage)
+                    logger.debug(f"Collection metadata already exists for bot {document.bot_id}")
             
             # Store embeddings in vector store
             stored_ids = await self.vector_service.store_document_chunks(
@@ -799,3 +853,76 @@ class DocumentService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to get document statistics: {str(e)}"
             )
+    
+    async def _process_document_with_retry(
+        self,
+        file_content: bytes,
+        filename: str,
+        document_id: str,
+        additional_metadata: Optional[Dict[str, Any]] = None,
+        max_retries: int = 3
+    ) -> Tuple[List, Dict[str, Any]]:
+        """
+        Process document with retry logic for better reliability.
+        
+        Args:
+            file_content: File content as bytes
+            filename: Original filename
+            document_id: Unique document identifier
+            additional_metadata: Additional metadata to include
+            max_retries: Maximum number of retry attempts
+            
+        Returns:
+            Tuple of (chunks, document_metadata)
+        """
+        last_error = None
+        
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"Processing document {filename}, attempt {attempt + 1}/{max_retries}")
+                
+                # Try processing with current processor
+                chunks, doc_metadata = self.processor.process_document(
+                    file_content=file_content,
+                    filename=filename,
+                    document_id=document_id,
+                    additional_metadata=additional_metadata
+                )
+                
+                logger.info(f"Successfully processed {filename} on attempt {attempt + 1}")
+                return chunks, doc_metadata
+                
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Document processing attempt {attempt + 1} failed for {filename}: {e}")
+                
+                # If this is not the last attempt, try with different settings
+                if attempt < max_retries - 1:
+                    try:
+                        # Try with OCR disabled for the retry
+                        from ..utils.text_processing import DocumentProcessor
+                        fallback_processor = DocumentProcessor(
+                            chunk_size=getattr(settings, 'chunk_size', 1000),
+                            chunk_overlap=getattr(settings, 'chunk_overlap', 200),
+                            max_file_size=getattr(settings, 'max_file_size', 50 * 1024 * 1024),
+                            enable_ocr=False  # Disable OCR for retry
+                        )
+                        
+                        logger.info(f"Retrying {filename} with OCR disabled")
+                        chunks, doc_metadata = fallback_processor.process_document(
+                            file_content=file_content,
+                            filename=filename,
+                            document_id=document_id,
+                            additional_metadata=additional_metadata
+                        )
+                        
+                        logger.info(f"Successfully processed {filename} with fallback processor")
+                        return chunks, doc_metadata
+                        
+                    except Exception as fallback_error:
+                        logger.warning(f"Fallback processing also failed for {filename}: {fallback_error}")
+                        continue
+        
+        # If all retries failed, raise the last error
+        logger.error(f"All processing attempts failed for {filename}")
+        raise last_error

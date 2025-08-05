@@ -211,7 +211,7 @@ export const runWebSocketDiagnostics = async (
         });
       };
 
-      testSocket.onerror = (error) => {
+      testSocket.onerror = () => {
         clearTimeout(timeout);
         resolve({
           test: 'WebSocket Connection',

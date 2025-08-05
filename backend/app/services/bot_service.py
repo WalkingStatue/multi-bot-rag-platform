@@ -1,6 +1,8 @@
 """
 Bot management service with permission integration.
 """
+import asyncio
+import logging
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
@@ -10,8 +12,14 @@ import uuid
 from ..models.bot import Bot, BotPermission
 from ..models.user import User
 from ..models.activity import ActivityLog
+from ..models.collection_metadata import CollectionMetadata
 from ..schemas.bot import BotCreate, BotUpdate
 from .permission_service import PermissionService
+from .vector_collection_manager import VectorCollectionManager
+from .embedding_service import EmbeddingProviderService
+
+
+logger = logging.getLogger(__name__)
 
 
 class BotService:
@@ -20,8 +28,10 @@ class BotService:
     def __init__(self, db: Session):
         self.db = db
         self.permission_service = PermissionService(db)
+        self.collection_manager = VectorCollectionManager(db)
+        self.embedding_service = EmbeddingProviderService()
     
-    def create_bot(self, user_id: uuid.UUID, bot_config: BotCreate) -> Bot:
+    async def create_bot(self, user_id: uuid.UUID, bot_config: BotCreate) -> Bot:
         """
         Create a new bot and assign owner permissions.
         
@@ -87,6 +97,50 @@ class BotService:
             }
         )
         
+        # Initialize vector collection with embedding configuration
+        try:
+            # Get embedding dimension for the configured provider and model
+            embedding_dimension = self.embedding_service.get_embedding_dimension(
+                bot_config.embedding_provider, 
+                bot_config.embedding_model
+            )
+            
+            # Prepare embedding configuration
+            embedding_config = {
+                "provider": bot_config.embedding_provider,
+                "model": bot_config.embedding_model,
+                "dimension": embedding_dimension
+            }
+            
+            # Initialize collection
+            collection_result = await self.collection_manager.ensure_collection_exists(
+                bot.id, embedding_config
+            )
+            
+            if collection_result.success:
+                # Store collection metadata
+                collection_metadata = CollectionMetadata(
+                    bot_id=bot.id,
+                    collection_name=str(bot.id),
+                    embedding_provider=bot_config.embedding_provider,
+                    embedding_model=bot_config.embedding_model,
+                    embedding_dimension=embedding_dimension,
+                    status="active",
+                    points_count=0
+                )
+                
+                self.db.add(collection_metadata)
+                
+                logger.info(f"Successfully initialized collection for bot {bot.id}")
+            else:
+                logger.warning(f"Failed to initialize collection for bot {bot.id}: {collection_result.error}")
+                # Don't fail bot creation if collection initialization fails
+                # The collection can be created later during first document upload
+                
+        except Exception as e:
+            logger.error(f"Error initializing collection for bot {bot.id}: {e}")
+            # Don't fail bot creation if collection initialization fails
+        
         self.db.commit()
         self.db.refresh(bot)
         
@@ -122,7 +176,7 @@ class BotService:
         
         return bot
     
-    def update_bot(self, bot_id: uuid.UUID, user_id: uuid.UUID, updates: BotUpdate) -> Bot:
+    async def update_bot(self, bot_id: uuid.UUID, user_id: uuid.UUID, updates: BotUpdate) -> Bot:
         """
         Update a bot if user has edit permissions.
         
@@ -151,8 +205,18 @@ class BotService:
                 detail="Bot not found"
             )
         
-        # Track changes for logging
+        # Track changes for logging and collection migration detection
         changes = {}
+        embedding_config_changed = False
+        old_embedding_config = None
+        new_embedding_config = None
+        
+        # Capture old embedding configuration before changes
+        old_embedding_config = {
+            "provider": bot.embedding_provider,
+            "model": bot.embedding_model,
+            "dimension": None  # Will be populated if needed
+        }
         
         # Update fields
         update_data = updates.model_dump(exclude_unset=True)
@@ -162,6 +226,70 @@ class BotService:
                 if old_value != value:
                     changes[field] = {"old": old_value, "new": value}
                     setattr(bot, field, value)
+                    
+                    # Check if embedding configuration changed
+                    if field in ["embedding_provider", "embedding_model"]:
+                        embedding_config_changed = True
+        
+        # Handle embedding configuration changes
+        if embedding_config_changed:
+            try:
+                # Get old dimension
+                old_embedding_config["dimension"] = self.embedding_service.get_embedding_dimension(
+                    old_embedding_config["provider"], 
+                    old_embedding_config["model"]
+                )
+                
+                # Get new dimension
+                new_embedding_config = {
+                    "provider": bot.embedding_provider,
+                    "model": bot.embedding_model,
+                    "dimension": self.embedding_service.get_embedding_dimension(
+                        bot.embedding_provider, 
+                        bot.embedding_model
+                    )
+                }
+                
+                logger.info(f"Embedding configuration changed for bot {bot_id}: {old_embedding_config} -> {new_embedding_config}")
+                
+                # Check if migration is needed (dimension change)
+                if old_embedding_config["dimension"] != new_embedding_config["dimension"]:
+                    logger.warning(f"Dimension change detected for bot {bot_id}, migration will be required")
+                    
+                    # Validate the new configuration
+                    validation_result = await self.collection_manager.validate_collection_configuration(
+                        bot_id, new_embedding_config
+                    )
+                    
+                    if not validation_result.success and validation_result.metadata and validation_result.metadata.get("requires_migration"):
+                        # Schedule migration (this would typically be done asynchronously)
+                        logger.info(f"Scheduling collection migration for bot {bot_id}")
+                        
+                        # For now, we'll just log the need for migration
+                        # In a production system, this would trigger a background job
+                        changes["migration_required"] = {
+                            "old_config": old_embedding_config,
+                            "new_config": new_embedding_config,
+                            "reason": "dimension_change"
+                        }
+                else:
+                    # Same dimension, just update metadata
+                    logger.info(f"Embedding model changed but dimension remains the same for bot {bot_id}")
+                    
+                    # Update collection metadata
+                    collection_metadata = self.db.query(CollectionMetadata).filter(
+                        CollectionMetadata.bot_id == bot_id
+                    ).first()
+                    
+                    if collection_metadata:
+                        collection_metadata.embedding_provider = bot.embedding_provider
+                        collection_metadata.embedding_model = bot.embedding_model
+                        logger.info(f"Updated collection metadata for bot {bot_id}")
+                
+            except Exception as e:
+                logger.error(f"Error handling embedding configuration change for bot {bot_id}: {e}")
+                # Don't fail the update, but log the issue
+                changes["embedding_config_error"] = str(e)
         
         if changes:
             # Log activity

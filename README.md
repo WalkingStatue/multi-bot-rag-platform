@@ -54,27 +54,30 @@ A comprehensive full-stack multi-bot assistant platform that enables users to cr
 - 📄 **Document-Enhanced AI** - Upload PDFs/TXT for RAG functionality
 - ⚡ **Real-time Updates** - WebSocket-based live collaboration
 
-## 🐳 Docker Environments
+## 🐳 Single Docker Environment
 
-### Development Environment
-
-**Start development environment:**
+**Quick start:**
 ```powershell
-docker compose up --build
+.\scripts\dev-setup.ps1
+```
+
+**With database setup:**
+```powershell
+.\scripts\dev-setup.ps1 -Build -Migrate -Seed
 ```
 
 **Services:**
-- Frontend: http://localhost:3000 (with hot reload)
-- Backend: http://localhost:8000 (with auto-reload)
-- PostgreSQL: localhost:5433
-- Redis: localhost:6380
-- Qdrant: http://localhost:6335
+- Frontend: http://localhost:3000
+- Backend: http://localhost:8000  
+- API Docs: http://localhost:8000/docs
+- PostgreSQL: localhost:5432
+- Redis: localhost:6379
+- Qdrant: http://localhost:6333
 
 **Useful commands:**
 ```powershell
 # View logs
-docker compose logs -f backend
-docker compose logs -f frontend
+docker compose logs -f
 
 # Restart a service
 docker compose restart backend
@@ -82,109 +85,29 @@ docker compose restart backend
 # Run database migrations
 docker compose exec backend alembic upgrade head
 
-# Access database
-docker compose exec postgres psql -U postgres -d multi_bot_rag_dev
-
 # Stop environment
 docker compose down
 ```
 
-### Testing Environment
-
-**Run all tests:**
-```powershell
-.\scripts\test-runner.ps1 -TestType all -Coverage
-```
-
-**Run specific test types:**
-```powershell
-# Unit tests only
-.\scripts\test-runner.ps1 -TestType unit
-
-# Integration tests only
-.\scripts\test-runner.ps1 -TestType integration
-
-# Frontend tests only
-.\scripts\test-runner.ps1 -TestType frontend
-
-# End-to-end tests only
-.\scripts\test-runner.ps1 -TestType e2e
-```
-
-**Manual test environment:**
-```powershell
-# Start test services
-docker compose -f docker-compose.test.yml up --build
-
-# Run specific tests
-docker compose -f docker-compose.test.yml run --rm backend-unit-test
-docker compose -f docker-compose.test.yml run --rm frontend-test
-
-# Clean up
-docker compose -f docker-compose.test.yml down --volumes
-```
-
-### Production Environment
-
-**Setup production environment:**
-
-1. **Create production configuration:**
-   ```powershell
-   copy .env.prod.example .env.prod
-   # Edit .env.prod with your production settings
-   ```
-
-2. **Deploy to production:**
-   ```powershell
-   # Full deployment with build and migrations
-   .\scripts\prod-deploy.ps1 -Build -Migrate -Scale -BackendReplicas 3 -FrontendReplicas 2
-
-   # Quick deployment (existing images)
-   .\scripts\prod-deploy.ps1
-
-   # With monitoring enabled
-   .\scripts\prod-deploy.ps1 -Monitor
-   ```
-
-**Production services:**
-- Application: http://localhost (or your domain)
-- API Documentation: http://localhost/api/docs
-
-**Production management:**
-```powershell
-# View production logs
-docker compose -f docker-compose.prod.yml logs -f
-
-# Scale services
-docker compose -f docker-compose.prod.yml up -d --scale backend=4 --scale frontend=3
-
-# Update deployment
-docker compose -f docker-compose.prod.yml up -d --build
-
-# Stop production
-docker compose -f docker-compose.prod.yml down
-```
-
 ## 🔧 Configuration
 
-### Environment Files
+### Environment File
 
-- **`.env.dev`** - Development configuration (auto-loaded)
-- **`.env.test`** - Testing configuration (auto-loaded)
-- **`.env.prod`** - Production configuration (create from `.env.prod.example`)
+Single `.env` file for all environments:
+- Copy from `config/.env.example`
+- Modify values as needed
 
 ### Key Configuration Options
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:password@host:port/database
+DATABASE_URL=postgresql://postgres:postgres@postgres:5432/multi_bot_rag
 
 # Redis
-REDIS_URL=redis://host:port
-REDIS_PASSWORD=your_password
+REDIS_URL=redis://redis:6379
 
 # Vector Database
-QDRANT_URL=http://host:port
+QDRANT_URL=http://qdrant:6333
 
 # Security
 SECRET_KEY=your-very-long-secret-key
@@ -204,43 +127,34 @@ VITE_WS_URL=ws://localhost:8000
 
 ```
 tests/
-├── unit/           # Unit tests for individual components
 ├── integration/    # Integration tests for API endpoints
-├── frontend/       # Frontend component and integration tests
-└── e2e/           # End-to-end user workflow tests
+backend/tests/      # Backend unit tests
 ```
 
 ### Running Tests
 
 ```powershell
-# All tests with coverage
-.\scripts\test-runner.ps1 -TestType all -Coverage -Verbose
+# All tests
+.\scripts\test-runner.ps1
 
-# Quick unit tests
-.\scripts\test-runner.ps1 -TestType unit
+# Backend only
+.\scripts\test-runner.ps1 -TestType backend
 
-# Integration tests
-.\scripts\test-runner.ps1 -TestType integration
-
-# Frontend tests
+# Frontend only
 .\scripts\test-runner.ps1 -TestType frontend
 
-# End-to-end tests
-.\scripts\test-runner.ps1 -TestType e2e
+# With coverage
+.\scripts\test-runner.ps1 -Coverage
 ```
 
 ### Test Reports
 
-Test results are available in:
-- **Reports**: `test-reports/` (JUnit XML format)
-- **Coverage**: `test-coverage/` (HTML reports)
+Coverage reports are available in `test-coverage/` when using the `-Coverage` flag.
 
-## 📊 Monitoring & Logging
-
-### Development Monitoring
+## 📊 Monitoring
 
 ```powershell
-# View real-time logs
+# View logs
 docker compose logs -f
 
 # Monitor resource usage
@@ -250,83 +164,13 @@ docker stats
 docker compose ps
 ```
 
-### Production Monitoring
-
-```powershell
-# Production logs
-docker compose -f docker-compose.prod.yml logs -f
-
-# Service health check
-docker compose -f docker-compose.prod.yml ps
-
-# Resource monitoring
-docker stats
-```
-
-### Log Locations
-
-- **Backend logs**: `backend/logs/`
-- **Frontend logs**: `frontend/logs/`
-- **Nginx logs**: `nginx/logs/`
-- **Database logs**: Available via `docker compose logs postgres`
-
-## 🔒 Security
-
-### Development Security
-
-- Default passwords (change for production)
-- CORS enabled for localhost
-- Debug mode enabled
-- Detailed error messages
-
-### Production Security
-
-- Strong passwords required
-- CORS restricted to your domain
-- Security headers enabled
-- Rate limiting configured
-- SSL/TLS support (configure certificates)
-
-### Security Checklist
-
-- [ ] Change all default passwords
-- [ ] Configure strong SECRET_KEY
-- [ ] Set up SSL certificates
-- [ ] Configure CORS for your domain
-- [ ] Enable rate limiting
-- [ ] Review security headers
-- [ ] Set up monitoring and alerting
-
 ## 🚀 Deployment
 
-### Local Development
+The single Docker Compose setup works for all environments. For production:
 
-```powershell
-# Start development environment
-.\scripts\dev-setup.ps1
-
-# Or manually
-docker compose up --build
-```
-
-### Production Deployment
-
-```powershell
-# Full production deployment
-.\scripts\prod-deploy.ps1 -Build -Migrate -Scale -BackendReplicas 3
-
-# Quick update
-.\scripts\prod-deploy.ps1 -Build
-```
-
-### Cloud Deployment
-
-The Docker Compose files can be adapted for cloud deployment:
-
-- **AWS**: Use ECS with the compose files
-- **Azure**: Use Container Instances or AKS
-- **Google Cloud**: Use Cloud Run or GKE
-- **DigitalOcean**: Use App Platform or Droplets
+1. Update `.env` with production values
+2. Run `docker compose up -d --build`
+3. Configure reverse proxy/SSL as needed
 
 ## 🛠️ Development
 
@@ -334,15 +178,18 @@ The Docker Compose files can be adapted for cloud deployment:
 
 ```
 multi-bot-rag-platform/
-├── backend/                 # FastAPI Python backend
-├── frontend/               # React TypeScript frontend
-├── nginx/                  # Nginx configuration
-├── scripts/                # Deployment and utility scripts
-├── docker-compose.yml      # Development environment
-├── docker-compose.prod.yml # Production environment
-├── docker-compose.test.yml # Testing environment
-└── README.md              # This file
+├── backend/                # FastAPI Python backend
+├── frontend/              # React TypeScript frontend
+├── tests/                 # Integration tests
+├── docs/                  # Documentation
+├── scripts/               # Setup and utility scripts
+├── tools/                 # Development tools
+├── config/                # Configuration templates
+├── docker-compose.yml     # Single Docker setup
+└── README.md             # This file
 ```
+
+See `docs/PROJECT_STRUCTURE.md` for detailed organization.
 
 ### Adding New Features
 

@@ -115,7 +115,7 @@ export const useChatSession = ({
       
       setConnectionStatus({
         status: 'error',
-        error: errorState.current
+        error: errorState.current || undefined
       });
     } finally {
       setLoading(false);

@@ -14,7 +14,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ botId }) => {
   const [messageInput, setMessageInput] = useState('');
   
   const {
-    sessions,
     currentSession,
     isLoading: sessionsLoading,
     error: sessionError,

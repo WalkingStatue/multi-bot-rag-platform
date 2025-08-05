@@ -468,7 +468,7 @@ export class ChatWebSocketService {
     setTimeout(async () => {
       if (this.token && this.currentBotId && connectionHealthMonitor.isHealthy()) {
         try {
-          await this.connectToBot(this.currentBotId, this.token, this.currentSessionId);
+          await this.connectToBot(this.currentBotId, this.token, this.currentSessionId || undefined);
         } catch (error) {
           console.error('Reconnection attempt failed:', error);
           // Continue with normal reconnection logic

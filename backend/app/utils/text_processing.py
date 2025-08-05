@@ -1,12 +1,18 @@
 """
-Text processing utilities for document chunking and extraction.
+Text processing utilities for document chunking and extraction with OCR support.
 """
 import re
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
-import PyPDF2
 from io import BytesIO
+import tempfile
+import os
+
+# PDF processing with OCR support
+import fitz  # PyMuPDF
+import pytesseract
+from PIL import Image
 
 # Try to import python-magic, fall back to mimetypes if not available
 try:
@@ -48,16 +54,41 @@ class TextChunk:
 
 
 class DocumentExtractor:
-    """Handles text extraction from various document formats with security checks."""
+    """Handles text extraction from various document formats with OCR support and security checks."""
     
     ALLOWED_MIME_TYPES = {
         'application/pdf': 'pdf',
         'text/plain': 'txt',
         'text/x-python': 'txt',  # Python files as text
-        'application/x-empty': 'txt'  # Empty files
+        'application/x-empty': 'txt',  # Empty files
+        'image/jpeg': 'image',
+        'image/png': 'image',
+        'image/tiff': 'image',
+        'image/bmp': 'image'
     }
     
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+    
+    def __init__(self, enable_ocr: bool = True, ocr_language: str = 'eng'):
+        """
+        Initialize document extractor.
+        
+        Args:
+            enable_ocr: Whether to enable OCR for scanned PDFs and images
+            ocr_language: Language code for OCR (e.g., 'eng', 'spa', 'fra')
+        """
+        self.enable_ocr = enable_ocr
+        self.ocr_language = ocr_language
+        
+        # Test OCR availability
+        if self.enable_ocr:
+            try:
+                # Test pytesseract installation
+                pytesseract.get_tesseract_version()
+                logger.info(f"OCR enabled with language: {ocr_language}")
+            except Exception as e:
+                logger.warning(f"OCR not available, disabling: {e}")
+                self.enable_ocr = False
     
     @classmethod
     def validate_file(cls, file_path: Path, file_content: bytes) -> Tuple[bool, str, str]:
@@ -78,7 +109,8 @@ class DocumentExtractor:
             
             # Check file extension
             file_extension = file_path.suffix.lower()
-            if file_extension not in ['.pdf', '.txt', '.py', '.md']:
+            allowed_extensions = ['.pdf', '.txt', '.py', '.md', '.jpg', '.jpeg', '.png', '.tiff', '.bmp']
+            if file_extension not in allowed_extensions:
                 return False, "", f"Unsupported file extension: {file_extension}"
             
             # Detect MIME type
@@ -98,6 +130,14 @@ class DocumentExtractor:
                         mime_type = 'application/pdf'
                     elif file_extension in ['.txt', '.py', '.md']:
                         mime_type = 'text/plain'
+                    elif file_extension in ['.jpg', '.jpeg']:
+                        mime_type = 'image/jpeg'
+                    elif file_extension == '.png':
+                        mime_type = 'image/png'
+                    elif file_extension in ['.tiff', '.tif']:
+                        mime_type = 'image/tiff'
+                    elif file_extension == '.bmp':
+                        mime_type = 'image/bmp'
                     else:
                         mime_type = 'application/octet-stream'
             
@@ -111,8 +151,7 @@ class DocumentExtractor:
             logger.error(f"Error validating file {file_path}: {e}")
             return False, "", f"File validation error: {str(e)}"
     
-    @classmethod
-    def extract_text(cls, file_content: bytes, mime_type: str, filename: str) -> Tuple[str, Dict[str, Any]]:
+    def extract_text(self, file_content: bytes, mime_type: str, filename: str) -> Tuple[str, Dict[str, Any]]:
         """
         Extract text from file content based on MIME type.
         
@@ -126,9 +165,11 @@ class DocumentExtractor:
         """
         try:
             if mime_type == 'application/pdf':
-                return cls._extract_pdf_text(file_content, filename)
+                return self._extract_pdf_text(file_content, filename)
             elif mime_type in ['text/plain', 'text/x-python', 'application/x-empty']:
-                return cls._extract_text_file(file_content, filename)
+                return self._extract_text_file(file_content, filename)
+            elif mime_type.startswith('image/'):
+                return self._extract_image_text(file_content, filename)
             else:
                 raise ValueError(f"Unsupported MIME type for extraction: {mime_type}")
                 
@@ -136,37 +177,117 @@ class DocumentExtractor:
             logger.error(f"Error extracting text from {filename}: {e}")
             raise ValueError(f"Text extraction failed: {str(e)}")
     
-    @classmethod
-    def _extract_pdf_text(cls, file_content: bytes, filename: str) -> Tuple[str, Dict[str, Any]]:
-        """Extract text from PDF file."""
+    def _extract_pdf_text(self, file_content: bytes, filename: str) -> Tuple[str, Dict[str, Any]]:
+        """Extract text from PDF file with OCR fallback for scanned documents."""
+        pdf_document = None
         try:
-            pdf_file = BytesIO(file_content)
-            pdf_reader = PyPDF2.PdfReader(pdf_file)
+            # Open PDF with PyMuPDF
+            pdf_document = fitz.open(stream=file_content, filetype="pdf")
             
             text_parts = []
             page_metadata = []
+            ocr_pages = []
+            total_images_processed = 0
+            total_pages = len(pdf_document)
             
-            for page_num, page in enumerate(pdf_reader.pages):
+            for page_num in range(total_pages):
                 try:
-                    page_text = page.extract_text()
+                    page = pdf_document[page_num]
+                    
+                    # First, try to extract text directly
+                    page_text = page.get_text()
+                    
+                    # If no text or very little text, try OCR on the page
+                    if self.enable_ocr and (not page_text.strip() or len(page_text.strip()) < 50):
+                        logger.info(f"Page {page_num + 1} has little/no text, attempting OCR")
+                        
+                        try:
+                            # Render page as image
+                            mat = fitz.Matrix(2.0, 2.0)  # 2x zoom for better OCR
+                            pix = page.get_pixmap(matrix=mat)
+                            img_data = pix.tobytes("png")
+                            
+                            # Clean up pixmap immediately
+                            pix = None
+                            
+                            # Convert to PIL Image and run OCR
+                            image = Image.open(BytesIO(img_data))
+                            ocr_text = pytesseract.image_to_string(
+                                image, 
+                                lang=self.ocr_language,
+                                config='--psm 6'  # Uniform block of text
+                            )
+                            
+                            # Clean up image
+                            image.close()
+                            
+                            if ocr_text.strip():
+                                page_text = ocr_text
+                                ocr_pages.append(page_num + 1)
+                                logger.info(f"OCR extracted {len(ocr_text)} characters from page {page_num + 1}")
+                            
+                        except Exception as e:
+                            logger.warning(f"OCR failed for page {page_num + 1}: {e}")
+                    
+                    # Also extract text from images within the page
+                    if self.enable_ocr:
+                        try:
+                            image_list = page.get_images()
+                            for img_index, img in enumerate(image_list):
+                                try:
+                                    xref = img[0]
+                                    pix = fitz.Pixmap(pdf_document, xref)
+                                    
+                                    if pix.n - pix.alpha < 4:  # GRAY or RGB
+                                        img_data = pix.tobytes("png")
+                                        image = Image.open(BytesIO(img_data))
+                                        
+                                        # Run OCR on the image
+                                        img_text = pytesseract.image_to_string(
+                                            image,
+                                            lang=self.ocr_language,
+                                            config='--psm 6'
+                                        )
+                                        
+                                        # Clean up image
+                                        image.close()
+                                        
+                                        if img_text.strip():
+                                            page_text += f"\n[Image {img_index + 1} text]: {img_text}"
+                                            total_images_processed += 1
+                                    
+                                    # Clean up pixmap immediately
+                                    pix = None
+                                    
+                                except Exception as e:
+                                    logger.warning(f"Failed to extract text from image {img_index + 1} on page {page_num + 1}: {e}")
+                        except Exception as e:
+                            logger.warning(f"Failed to process images on page {page_num + 1}: {e}")
+                    
                     if page_text.strip():
                         text_parts.append(page_text)
                         page_metadata.append({
                             "page_number": page_num + 1,
                             "char_start": len("\n".join(text_parts[:-1])) + (1 if text_parts[:-1] else 0),
-                            "char_end": len("\n".join(text_parts))
+                            "char_end": len("\n".join(text_parts)),
+                            "used_ocr": (page_num + 1) in ocr_pages,
+                            "image_count": len(page.get_images()) if hasattr(page, 'get_images') else 0
                         })
+                
                 except Exception as e:
-                    logger.warning(f"Error extracting text from page {page_num + 1} of {filename}: {e}")
+                    logger.warning(f"Error processing page {page_num + 1}: {e}")
                     continue
             
             full_text = "\n".join(text_parts)
             
             metadata = {
-                "total_pages": len(pdf_reader.pages),
+                "total_pages": total_pages,
                 "extracted_pages": len(page_metadata),
+                "ocr_pages": ocr_pages,
+                "ocr_enabled": self.enable_ocr,
+                "images_processed": total_images_processed,
                 "page_metadata": page_metadata,
-                "extraction_method": "PyPDF2"
+                "extraction_method": "PyMuPDF + OCR" if ocr_pages else "PyMuPDF"
             }
             
             return full_text, metadata
@@ -174,9 +295,53 @@ class DocumentExtractor:
         except Exception as e:
             logger.error(f"PDF extraction failed for {filename}: {e}")
             raise ValueError(f"PDF extraction failed: {str(e)}")
+        finally:
+            # Ensure PDF document is properly closed
+            if pdf_document is not None:
+                try:
+                    pdf_document.close()
+                except:
+                    pass
     
-    @classmethod
-    def _extract_text_file(cls, file_content: bytes, filename: str) -> Tuple[str, Dict[str, Any]]:
+    def _extract_image_text(self, file_content: bytes, filename: str) -> Tuple[str, Dict[str, Any]]:
+        """Extract text from image file using OCR."""
+        if not self.enable_ocr:
+            raise ValueError("OCR is disabled, cannot extract text from images")
+        
+        try:
+            # Open image with PIL
+            image = Image.open(BytesIO(file_content))
+            
+            # Convert to RGB if necessary
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Run OCR
+            extracted_text = pytesseract.image_to_string(
+                image,
+                lang=self.ocr_language,
+                config='--psm 6'  # Uniform block of text
+            )
+            
+            # Get image info
+            width, height = image.size
+            
+            metadata = {
+                "image_width": width,
+                "image_height": height,
+                "image_mode": image.mode,
+                "ocr_language": self.ocr_language,
+                "extraction_method": "OCR (pytesseract)",
+                "char_count": len(extracted_text)
+            }
+            
+            return extracted_text, metadata
+            
+        except Exception as e:
+            logger.error(f"Image OCR extraction failed for {filename}: {e}")
+            raise ValueError(f"Image OCR extraction failed: {str(e)}")
+    
+    def _extract_text_file(self, file_content: bytes, filename: str) -> Tuple[str, Dict[str, Any]]:
         """Extract text from plain text file."""
         try:
             # Try different encodings
@@ -409,13 +574,15 @@ class TextChunker:
 
 
 class DocumentProcessor:
-    """High-level document processing pipeline."""
+    """High-level document processing pipeline with OCR support."""
     
     def __init__(
         self,
         chunk_size: int = 1000,
         chunk_overlap: int = 200,
-        max_file_size: int = 50 * 1024 * 1024
+        max_file_size: int = 50 * 1024 * 1024,
+        enable_ocr: bool = True,
+        ocr_language: str = 'eng'
     ):
         """
         Initialize document processor.
@@ -424,8 +591,10 @@ class DocumentProcessor:
             chunk_size: Target chunk size in characters
             chunk_overlap: Overlap between chunks in characters
             max_file_size: Maximum allowed file size in bytes
+            enable_ocr: Whether to enable OCR for scanned PDFs and images
+            ocr_language: Language code for OCR (e.g., 'eng', 'spa', 'fra')
         """
-        self.extractor = DocumentExtractor()
+        self.extractor = DocumentExtractor(enable_ocr=enable_ocr, ocr_language=ocr_language)
         self.chunker = TextChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         self.max_file_size = max_file_size
     

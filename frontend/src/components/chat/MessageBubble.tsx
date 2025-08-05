@@ -2,6 +2,7 @@
  * Individual message bubble component
  */
 import React, { useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { MessageWithStatus } from '../../types/chat';
 
 interface MessageBubbleProps {
@@ -96,8 +97,108 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           } ${showDetails ? 'shadow-lg' : 'hover:shadow-md'}`}
           onClick={() => setShowDetails(!showDetails)}
         >
-          <div className="whitespace-pre-wrap break-words">
-            {message.content}
+          <div className="break-words">
+            {isUser ? (
+              <div className="whitespace-pre-wrap">{message.content}</div>
+            ) : (
+              <ReactMarkdown 
+                className="prose prose-sm max-w-none"
+                components={{
+                  // Custom styling for markdown elements in chat context
+                  p: ({ children }) => <p className="mb-2 last:mb-0 leading-relaxed">{children}</p>,
+                  ul: ({ children }) => <ul className="list-disc list-inside mb-2 space-y-1 ml-2">{children}</ul>,
+                  ol: ({ children }) => <ol className="list-decimal list-inside mb-2 space-y-1 ml-2">{children}</ol>,
+                  li: ({ children }) => <li className="text-sm leading-relaxed">{children}</li>,
+                  h1: ({ children }) => <h1 className="text-lg font-bold mb-2 text-white">{children}</h1>,
+                  h2: ({ children }) => <h2 className="text-base font-bold mb-2 text-white">{children}</h2>,
+                  h3: ({ children }) => <h3 className="text-sm font-bold mb-1 text-white">{children}</h3>,
+                  code: ({ children, className }) => {
+                    const isInline = !className;
+                    return isInline ? (
+                      <code className={`px-1 py-0.5 rounded text-xs font-mono ${
+                        isUser 
+                          ? 'bg-blue-500 text-blue-100' 
+                          : 'bg-gray-200 text-gray-800'
+                      }`}>
+                        {children}
+                      </code>
+                    ) : (
+                      <code className={`block p-2 rounded text-xs font-mono whitespace-pre-wrap overflow-x-auto mt-2 ${
+                        isUser 
+                          ? 'bg-blue-500 text-blue-100' 
+                          : 'bg-gray-200 text-gray-800'
+                      }`}>
+                        {children}
+                      </code>
+                    );
+                  },
+                  pre: ({ children }) => (
+                    <pre className={`p-2 rounded text-xs font-mono whitespace-pre-wrap overflow-x-auto mt-2 ${
+                      isUser 
+                        ? 'bg-blue-500 text-blue-100' 
+                        : 'bg-gray-200 text-gray-800'
+                    }`}>
+                      {children}
+                    </pre>
+                  ),
+                  blockquote: ({ children }) => (
+                    <blockquote className={`border-l-4 pl-3 italic mb-2 ${
+                      isUser 
+                        ? 'border-blue-300 text-blue-100' 
+                        : 'border-gray-300 text-gray-600'
+                    }`}>
+                      {children}
+                    </blockquote>
+                  ),
+                  strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                  em: ({ children }) => <em className="italic">{children}</em>,
+                  a: ({ children, href }) => (
+                    <a 
+                      href={href} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className={`underline hover:no-underline ${
+                        isUser 
+                          ? 'text-blue-200 hover:text-blue-100' 
+                          : 'text-blue-600 hover:text-blue-800'
+                      }`}
+                    >
+                      {children}
+                    </a>
+                  ),
+                  // Handle tables if they appear
+                  table: ({ children }) => (
+                    <div className="overflow-x-auto mt-2 mb-2">
+                      <table className={`min-w-full text-xs ${
+                        isUser ? 'text-white' : 'text-gray-900'
+                      }`}>
+                        {children}
+                      </table>
+                    </div>
+                  ),
+                  th: ({ children }) => (
+                    <th className={`px-2 py-1 border font-semibold ${
+                      isUser 
+                        ? 'border-blue-400 bg-blue-500' 
+                        : 'border-gray-300 bg-gray-100'
+                    }`}>
+                      {children}
+                    </th>
+                  ),
+                  td: ({ children }) => (
+                    <td className={`px-2 py-1 border ${
+                      isUser 
+                        ? 'border-blue-400' 
+                        : 'border-gray-300'
+                    }`}>
+                      {children}
+                    </td>
+                  )
+                }}
+              >
+                {message.content}
+              </ReactMarkdown>
+            )}
           </div>
           
           {/* Message metadata */}

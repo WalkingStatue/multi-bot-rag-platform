@@ -13,6 +13,10 @@ from .vector_store import (
     VectorStoreFactory,
     VectorService
 )
+from .rag_pipeline_manager import RAGPipelineManager
+from .embedding_compatibility_manager import EmbeddingCompatibilityManager
+from .vector_collection_manager import VectorCollectionManager
+from .rag_error_recovery import RAGErrorRecovery
 
 __all__ = [
     "AuthService",
@@ -25,4 +29,8 @@ __all__ = [
     "QdrantVectorStore",
     "VectorStoreFactory",
     "VectorService",
+    "RAGPipelineManager",
+    "EmbeddingCompatibilityManager",
+    "VectorCollectionManager",
+    "RAGErrorRecovery",
 ]

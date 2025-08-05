@@ -1,9 +1,8 @@
 /**
  * Chat diagnostics component for debugging chat system issues
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { chatWebSocketService } from '../../services/chatWebSocketService';
-import { chatService } from '../../services/chatService';
 import { useChatStore } from '../../stores/chatStore';
 
 interface ChatDiagnosticsProps {
@@ -51,8 +50,8 @@ export const ChatDiagnostics: React.FC<ChatDiagnosticsProps> = ({
           messagesCount: Object.keys(useChatStore.getState().messages).length
         },
         backend: {
-          healthCheck: null,
-          wsEndpoint: null
+          healthCheck: null as any,
+          wsEndpoint: null as any
         }
       };
 

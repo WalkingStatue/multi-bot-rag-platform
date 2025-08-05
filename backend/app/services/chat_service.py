@@ -19,6 +19,7 @@ from .llm_service import LLMProviderService
 from .embedding_service import EmbeddingProviderService
 from .vector_store import VectorService
 from .user_service import UserService
+from .enhanced_api_key_service import EnhancedAPIKeyService
 
 
 logger = logging.getLogger(__name__)
@@ -47,11 +48,12 @@ class ChatService:
         self.embedding_service = EmbeddingProviderService()
         self.vector_service = VectorService()
         self.user_service = UserService(db)
+        self.api_key_service = EnhancedAPIKeyService(db)
         
         # Configuration
         self.max_history_messages = 10
         self.max_retrieved_chunks = 5
-        self.similarity_threshold = 0.01  # Very low threshold for Gemini embeddings
+        self.similarity_threshold = 0.3  # Adjusted threshold for Gemini embeddings (cosine similarity)
         self.max_prompt_length = 8000
     
     async def process_message(
@@ -255,11 +257,8 @@ class ChatService:
             
             # Generate query embedding with comprehensive error handling
             try:
-                # FIXED: Get user's API key for the configured embedding provider
-                # Use bot owner's API key since they configured the embedding provider
-                user_api_key = self._get_user_api_key_sync(
-                    bot.owner_id, bot.embedding_provider
-                )
+                # Get API key from bot owner
+                user_api_key = self.user_service.get_user_api_key(bot.owner_id, bot.embedding_provider)
                 logger.info(f"Retrieved API key for embedding provider {bot.embedding_provider} from bot owner")
                 
                 # FIXED: Validate embedding model compatibility and dimensions
@@ -544,8 +543,8 @@ class ChatService:
         prompt: str
     ) -> Tuple[str, Dict[str, Any]]:
         """Generate response using the configured LLM provider."""
-        # Get user's API key for the LLM provider
-        user_api_key = await self._get_user_api_key(user_id, bot.llm_provider)
+        # Get API key using unified strategy with fallback
+        user_api_key = await self._get_unified_api_key(bot.id, user_id, bot.llm_provider)
         
         # Get model-specific max tokens if bot's max_tokens is default
         max_tokens = bot.max_tokens
@@ -585,12 +584,62 @@ class ChatService:
         
         return response_text, metadata
     
+    async def _get_unified_api_key(
+        self,
+        bot_id: uuid.UUID,
+        user_id: uuid.UUID,
+        provider: str
+    ) -> str:
+        """Get API key using unified strategy with fallback and error handling."""
+        try:
+            # Use enhanced API key service with fallback
+            fallback_result = await self.api_key_service.get_api_key_with_fallback(
+                bot_id=bot_id,
+                user_id=user_id,
+                provider=provider,
+                validate_key=True,
+                enable_fallback=True
+            )
+            
+            if fallback_result.success:
+                logger.info(f"Successfully resolved API key for {provider} from {fallback_result.source.value}")
+                return fallback_result.api_key
+            
+            # Generate specific error message with remediation steps
+            error_message = fallback_result.final_error or f"No valid API key found for {provider}"
+            
+            # Add specific remediation suggestions
+            suggestions = self.api_key_service.unified_manager.get_api_key_configuration_suggestions(
+                bot_id, user_id, provider
+            )
+            
+            if suggestions:
+                error_message += f"\n\nSuggested actions:\n" + "\n".join(f"• {suggestion}" for suggestion in suggestions[:3])
+            
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=error_message
+            )
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in unified API key resolution: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to resolve API key for {provider}: {str(e)}"
+            )
+    
     def _get_user_api_key_sync(
         self,
         user_id: uuid.UUID,
         provider: str
     ) -> Optional[str]:
-        """Get user's API key for a specific provider (synchronous version)."""
+        """
+        Legacy synchronous API key method - deprecated.
+        Use _get_unified_api_key instead for new implementations.
+        """
+        logger.warning("Using deprecated _get_user_api_key_sync method. Consider migrating to _get_unified_api_key.")
         try:
             api_key = self.user_service.get_user_api_key(user_id, provider)
             if not api_key:
@@ -611,7 +660,11 @@ class ChatService:
         user_id: uuid.UUID,
         provider: str
     ) -> Optional[str]:
-        """Get user's API key for a specific provider."""
+        """
+        Legacy async API key method - deprecated.
+        Use _get_unified_api_key instead for new implementations.
+        """
+        logger.warning("Using deprecated _get_user_api_key method. Consider migrating to _get_unified_api_key.")
         return self._get_user_api_key_sync(user_id, provider)
     
     async def _log_conversation_metadata(
@@ -800,14 +853,23 @@ class ChatService:
                 diagnosis["recommendations"].append("Reprocess documents to create vector collection")
                 return diagnosis
             
-            # Check API key availability
+            # Check API key availability using unified strategy
             try:
-                api_key = self._get_user_api_key_sync(bot.owner_id, bot.embedding_provider)
-                diagnosis["api_key_available"] = bool(api_key)
-            except:
+                availability_check = await self.api_key_service.unified_manager.check_api_key_availability(
+                    bot.id, bot.owner_id, bot.embedding_provider
+                )
+                diagnosis["api_key_available"] = availability_check.available
+                diagnosis["api_key_sources"] = [source.value for source in availability_check.valid_sources]
+                
+                if not availability_check.available:
+                    diagnosis["issues"].append(f"No valid API key available for {bot.embedding_provider}")
+                    if availability_check.recommendations:
+                        diagnosis["recommendations"].extend(availability_check.recommendations)
+                    
+            except Exception as e:
                 diagnosis["api_key_available"] = False
-                diagnosis["issues"].append(f"No API key configured for embedding provider: {bot.embedding_provider}")
-                diagnosis["recommendations"].append(f"Bot owner should configure API key for {bot.embedding_provider}")
+                diagnosis["issues"].append(f"API key check failed for {bot.embedding_provider}: {str(e)}")
+                diagnosis["recommendations"].append(f"Configure API key for {bot.embedding_provider}")
             
             # Check model validity
             model_valid = self.embedding_service.validate_model_for_provider(bot.embedding_provider, bot.embedding_model)
@@ -838,7 +900,10 @@ class ChatService:
             # Test embedding generation
             if diagnosis["api_key_available"] and diagnosis["model_valid"]:
                 try:
-                    api_key = self._get_user_api_key_sync(bot.owner_id, bot.embedding_provider)
+                    # Use unified API key strategy for testing
+                    api_key = await self._get_unified_api_key(
+                        bot.id, bot.owner_id, bot.embedding_provider
+                    )
                     test_embedding = await self.embedding_service.generate_single_embedding(
                         provider=bot.embedding_provider,
                         text="test query",

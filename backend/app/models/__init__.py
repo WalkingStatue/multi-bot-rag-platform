@@ -6,6 +6,7 @@ from .bot import Bot, BotPermission
 from .conversation import ConversationSession, Message
 from .document import Document, DocumentChunk
 from .activity import ActivityLog
+from .collection_metadata import CollectionMetadata, EmbeddingConfigurationHistory, DimensionCompatibilityCache
 
 __all__ = [
     "User",
@@ -17,4 +18,7 @@ __all__ = [
     "Document",
     "DocumentChunk",
     "ActivityLog",
+    "CollectionMetadata",
+    "EmbeddingConfigurationHistory",
+    "DimensionCompatibilityCache",
 ]
