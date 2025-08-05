@@ -22,6 +22,8 @@ from ..services.permission_service import PermissionService
 from ..services.embedding_service import EmbeddingProviderService
 from ..services.vector_store import VectorService
 from ..services.vector_collection_manager import VectorCollectionManager
+from ..services.optimized_chunk_storage import OptimizedChunkStorage
+from ..services.chunk_metadata_cache import ChunkMetadataCache
 from ..models.collection_metadata import CollectionMetadata
 from ..utils.text_processing import DocumentProcessor, TextChunk
 
@@ -37,7 +39,9 @@ class DocumentService:
         permission_service: PermissionService = None,
         embedding_service: EmbeddingProviderService = None,
         vector_service: VectorService = None,
-        collection_manager: VectorCollectionManager = None
+        collection_manager: VectorCollectionManager = None,
+        optimized_storage: OptimizedChunkStorage = None,
+        metadata_cache: ChunkMetadataCache = None
     ):
         """
         Initialize document service.
@@ -48,11 +52,15 @@ class DocumentService:
             embedding_service: Embedding service instance
             vector_service: Vector service instance
             collection_manager: Vector collection manager instance
+            optimized_storage: Optimized chunk storage service
+            metadata_cache: Chunk metadata cache service
         """
         self.db = db
         self.permission_service = permission_service or PermissionService(db)
         self.embedding_service = embedding_service or EmbeddingProviderService()
         self.collection_manager = collection_manager or VectorCollectionManager(db)
+        self.optimized_storage = optimized_storage or OptimizedChunkStorage(db)
+        self.metadata_cache = metadata_cache or ChunkMetadataCache(db)
         
         # Initialize vector service
         self.vector_service = vector_service or VectorService()
@@ -259,39 +267,19 @@ class DocumentService:
                 api_key=api_key
             )
             
-            # Prepare chunks for vector storage
-            vector_chunks = []
-            db_chunks = []
-            
-            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-                chunk_id = str(uuid.uuid4())
-                
-                # Prepare for vector store
-                vector_chunk = {
-                    "id": chunk_id,
-                    "embedding": embedding,
-                    "text": chunk.content,
-                    "metadata": {
-                        "document_id": str(document_id),
-                        "chunk_index": chunk.chunk_index,
-                        "start_char": chunk.start_char,
-                        "end_char": chunk.end_char,
+            # Prepare chunks for optimized storage
+            chunk_data = []
+            for chunk in chunks:
+                chunk_info = {
+                    'content': chunk.content,
+                    'metadata': {
+                        'chunk_index': chunk.chunk_index,
+                        'start_char': chunk.start_char,
+                        'end_char': chunk.end_char,
                         **chunk.metadata
                     }
                 }
-                vector_chunks.append(vector_chunk)
-                
-                # Prepare for database
-                db_chunk = DocumentChunk(
-                    id=UUID(chunk_id),
-                    document_id=document_id,
-                    bot_id=document.bot_id,
-                    chunk_index=chunk.chunk_index,
-                    content=chunk.content,
-                    embedding_id=chunk_id,
-                    chunk_metadata=chunk.metadata
-                )
-                db_chunks.append(db_chunk)
+                chunk_data.append(chunk_info)
             
             # Ensure vector collection exists for this bot with proper validation
             if self.vector_service and vector_chunks:
@@ -338,18 +326,23 @@ class DocumentService:
                     # Update points count (will be updated after successful storage)
                     logger.debug(f"Collection metadata already exists for bot {document.bot_id}")
             
-            # Store embeddings in vector store
-            stored_ids = await self.vector_service.store_document_chunks(
-                str(document.bot_id), vector_chunks
+            # Use optimized storage for efficient chunk storage with deduplication
+            storage_result = await self.optimized_storage.store_chunks_efficiently(
+                bot_id=document.bot_id,
+                document_id=document_id,
+                chunks=chunk_data,
+                embeddings=embeddings,
+                enable_deduplication=True,
+                batch_size=100
             )
             
-            # Store chunks in database
-            self.db.add_all(db_chunks)
+            if not storage_result.success:
+                raise Exception(f"Failed to store chunks: {storage_result.error}")
             
-            # Update document with chunk count
-            document.chunk_count = len(chunks)
+            # Cache metadata for frequently accessed chunks
+            await self.metadata_cache.cache_bot_chunks(document.bot_id)
             
-            self.db.commit()
+            stored_ids = storage_result.vector_ids
             
             # Get processing statistics
             processing_stats = self.processor.get_processing_stats(chunks)
@@ -357,10 +350,12 @@ class DocumentService:
             result = {
                 "document_id": str(document_id),
                 "filename": document.filename,
-                "chunks_created": len(chunks),
+                "chunks_created": storage_result.stored_chunks,
+                "chunks_deduplicated": storage_result.deduplicated_chunks,
                 "embeddings_stored": len(stored_ids),
                 "processing_stats": processing_stats,
-                "document_metadata": doc_metadata
+                "document_metadata": doc_metadata,
+                "storage_optimized": True
             }
             
             logger.info(f"Document {document.filename} processed successfully: {len(chunks)} chunks")

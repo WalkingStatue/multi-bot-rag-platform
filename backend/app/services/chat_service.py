@@ -20,6 +20,8 @@ from .embedding_service import EmbeddingProviderService
 from .vector_store import VectorService
 from .user_service import UserService
 from .enhanced_api_key_service import EnhancedAPIKeyService
+from .rag_error_recovery import RAGErrorRecovery, ErrorContext, ErrorCategory, ErrorSeverity
+from .comprehensive_error_handler import ComprehensiveErrorHandler, ErrorHandlingConfig
 
 
 logger = logging.getLogger(__name__)
@@ -49,12 +51,23 @@ class ChatService:
         self.vector_service = VectorService()
         self.user_service = UserService(db)
         self.api_key_service = EnhancedAPIKeyService(db)
+        self.error_recovery = RAGErrorRecovery()
+        
+        # Initialize comprehensive error handler
+        error_config = ErrorHandlingConfig(
+            enable_graceful_degradation=True,
+            enable_service_recovery_detection=True,
+            enable_fallback_responses=True,
+            error_context_in_response=True
+        )
+        self.comprehensive_error_handler = ComprehensiveErrorHandler(db, error_config)
         
         # Configuration
         self.max_history_messages = 10
         self.max_retrieved_chunks = 5
         self.similarity_threshold = 0.3  # Adjusted threshold for Gemini embeddings (cosine similarity)
         self.max_prompt_length = 8000
+        self.enable_graceful_degradation = True
     
     async def process_message(
         self,
@@ -106,9 +119,9 @@ class ChatService:
                 session.id, bot_id, user_id, chat_request.message
             )
             
-            # Step 5: Retrieve relevant document chunks using RAG
-            relevant_chunks = await self._retrieve_relevant_chunks(
-                bot, chat_request.message
+            # Step 5: Retrieve relevant document chunks using RAG with error recovery
+            relevant_chunks, rag_metadata = await self._retrieve_relevant_chunks_with_recovery(
+                bot, chat_request.message, user_id
             )
             
             # Step 6: Get conversation history (excluding current message)
@@ -132,7 +145,8 @@ class ChatService:
                     **response_metadata,
                     "chunks_used": [chunk["id"] for chunk in relevant_chunks],
                     "chunks_count": len(relevant_chunks),
-                    "prompt_length": len(prompt)
+                    "prompt_length": len(prompt),
+                    **rag_metadata  # Include RAG error recovery metadata
                 }
             )
             
@@ -149,6 +163,12 @@ class ChatService:
                 bot_id, user_id, user_message, assistant_message, session.id
             )
             
+            # Step 12: Send user notification if RAG fallback was used
+            if rag_metadata.get("fallback_used") and rag_metadata.get("fallback_message"):
+                await self._send_rag_fallback_notification(
+                    bot_id, user_id, session.id, rag_metadata
+                )
+            
             return ChatResponse(
                 message=response_text,
                 session_id=session.id,
@@ -160,7 +180,8 @@ class ChatService:
                     "chunks_count": len(relevant_chunks),
                     "llm_provider": bot.llm_provider,
                     "llm_model": bot.llm_model,
-                    **response_metadata
+                    **response_metadata,
+                    **rag_metadata  # Include RAG error recovery metadata
                 }
             )
             
@@ -172,6 +193,85 @@ class ChatService:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to process chat message: {str(e)}"
             )
+    
+    async def _send_rag_fallback_notification(
+        self,
+        bot_id: uuid.UUID,
+        user_id: uuid.UUID,
+        session_id: uuid.UUID,
+        rag_metadata: Dict[str, Any]
+    ):
+        """Send user notification when RAG fallback is used."""
+        try:
+            # Get WebSocket service
+            websocket_service = get_websocket_service()
+            
+            # Create notification data
+            notification_data = {
+                "type": "rag_fallback",
+                "bot_id": str(bot_id),
+                "session_id": str(session_id),
+                "message": rag_metadata.get("fallback_message", "Document context is temporarily unavailable"),
+                "degradation_reason": rag_metadata.get("degradation_reason"),
+                "recovery_strategy": rag_metadata.get("recovery_strategy"),
+                "timestamp": time.time()
+            }
+            
+            # Add user notification details if available
+            if "user_notification" in rag_metadata:
+                notification_data.update(rag_metadata["user_notification"])
+            
+            # Send notification via WebSocket
+            await websocket_service.send_notification_to_user(
+                user_id=user_id,
+                notification_type="rag_status",
+                data=notification_data
+            )
+            
+            logger.info(f"Sent RAG fallback notification to user {user_id} for bot {bot_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to send RAG fallback notification: {e}")
+    
+    async def _send_service_recovery_notification(
+        self,
+        bot_id: uuid.UUID,
+        user_id: uuid.UUID,
+        service_name: str,
+        recovery_details: Optional[Dict[str, Any]] = None
+    ):
+        """Send notification when a service recovers."""
+        try:
+            # Create service recovery notification
+            notification = self.comprehensive_error_handler.notification_service.create_service_recovery_notification(
+                service_name=service_name,
+                bot_id=bot_id,
+                user_id=user_id,
+                recovery_details=recovery_details
+            )
+            
+            if self.comprehensive_error_handler.notification_service.should_send_notification(notification):
+                # Get WebSocket service
+                websocket_service = get_websocket_service()
+                
+                # Send notification via WebSocket
+                await websocket_service.send_notification_to_user(
+                    user_id=user_id,
+                    notification_type="service_recovery",
+                    data={
+                        "type": notification.type.value,
+                        "title": notification.title,
+                        "message": notification.message,
+                        "service_name": service_name,
+                        "bot_id": str(bot_id),
+                        "timestamp": notification.timestamp
+                    }
+                )
+                
+                logger.info(f"Sent service recovery notification to user {user_id} for {service_name}")
+            
+        except Exception as e:
+            logger.error(f"Failed to send service recovery notification: {e}")
     
     async def _get_or_create_session(
         self,
@@ -236,6 +336,138 @@ class ChatService:
         
         return self.conversation_service.add_message(user_id, message_data)
     
+    async def _retrieve_relevant_chunks_with_recovery(
+        self,
+        bot: Bot,
+        query: str,
+        user_id: uuid.UUID
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+        """
+        Retrieve relevant document chunks with comprehensive error recovery.
+        
+        Returns:
+            Tuple of (chunks, metadata) where metadata includes error recovery information
+        """
+        recovery_metadata = {
+            "rag_enabled": True,
+            "fallback_used": False,
+            "error_recovery_applied": False,
+            "degradation_reason": None
+        }
+        
+        try:
+            chunks = await self._retrieve_relevant_chunks(bot, query)
+            return chunks, recovery_metadata
+            
+        except Exception as e:
+            logger.error(f"RAG retrieval failed for bot {bot.id}: {e}")
+            
+            # Use comprehensive error handler for embedding failures
+            if any(keyword in str(e).lower() for keyword in ["embedding", "api key", "authentication", "model"]):
+                fallback_response = await self.comprehensive_error_handler.handle_embedding_failure(
+                    error=e,
+                    bot_id=bot.id,
+                    user_id=user_id,
+                    query=query
+                )
+                
+                if fallback_response.success:
+                    recovery_metadata.update({
+                        "rag_enabled": False,
+                        "fallback_used": True,
+                        "degradation_reason": "embedding_failure",
+                        "fallback_message": fallback_response.message,
+                        **fallback_response.metadata
+                    })
+                    logger.info(f"Applied embedding failure fallback for bot {bot.id}: {fallback_response.message}")
+                    return fallback_response.data or [], recovery_metadata
+            
+            # Use comprehensive error handler for vector search failures
+            elif any(keyword in str(e).lower() for keyword in ["vector", "search", "collection", "qdrant"]):
+                fallback_response = await self.comprehensive_error_handler.handle_vector_search_failure(
+                    error=e,
+                    bot_id=bot.id,
+                    user_id=user_id
+                )
+                
+                if fallback_response.success:
+                    recovery_metadata.update({
+                        "rag_enabled": False,
+                        "fallback_used": True,
+                        "degradation_reason": "vector_search_failure",
+                        "fallback_message": fallback_response.message,
+                        **fallback_response.metadata
+                    })
+                    logger.info(f"Applied vector search failure fallback for bot {bot.id}: {fallback_response.message}")
+                    return fallback_response.data or [], recovery_metadata
+            
+            # Generic error handling with comprehensive handler
+            else:
+                success, data, metadata = await self.comprehensive_error_handler.handle_rag_operation_error(
+                    operation_name="rag_retrieval",
+                    error=e,
+                    bot_id=bot.id,
+                    user_id=user_id,
+                    operation_context={"query": query[:100]},
+                    fallback_data=[]
+                )
+                
+                if success:
+                    recovery_metadata.update({
+                        "rag_enabled": False,
+                        "fallback_used": True,
+                        "degradation_reason": "generic_rag_failure",
+                        **metadata
+                    })
+                    logger.info(f"Applied generic RAG failure fallback for bot {bot.id}")
+                    return data or [], recovery_metadata
+            
+            # If all recovery attempts fail, update metadata and re-raise
+            recovery_metadata.update({
+                "rag_enabled": False,
+                "error_recovery_applied": True,
+                "recovery_success": False,
+                "degradation_reason": "all_recovery_failed",
+                "original_error": str(e)
+            })
+            
+            # In graceful degradation mode, return empty chunks instead of raising
+            if self.enable_graceful_degradation:
+                logger.warning(f"All recovery attempts failed for bot {bot.id}, continuing without RAG")
+                return [], recovery_metadata
+            
+            raise
+    
+    def _categorize_rag_error(self, error: Exception) -> ErrorCategory:
+        """Categorize RAG-specific errors."""
+        error_message = str(error).lower()
+        
+        if any(keyword in error_message for keyword in ["api key", "authentication", "unauthorized"]):
+            return ErrorCategory.API_KEY_VALIDATION
+        elif any(keyword in error_message for keyword in ["embedding", "model not found", "provider"]):
+            return ErrorCategory.EMBEDDING_GENERATION
+        elif any(keyword in error_message for keyword in ["vector", "search", "similarity", "collection"]):
+            return ErrorCategory.VECTOR_SEARCH
+        elif any(keyword in error_message for keyword in ["network", "timeout", "connection"]):
+            return ErrorCategory.NETWORK_CONNECTIVITY
+        elif any(keyword in error_message for keyword in ["rate limit", "quota", "resource"]):
+            return ErrorCategory.RESOURCE_EXHAUSTION
+        else:
+            return ErrorCategory.UNKNOWN
+    
+    def _assess_rag_error_severity(self, error: Exception) -> ErrorSeverity:
+        """Assess severity of RAG errors."""
+        error_message = str(error).lower()
+        
+        if any(keyword in error_message for keyword in ["corrupt", "data loss"]):
+            return ErrorSeverity.CRITICAL
+        elif any(keyword in error_message for keyword in ["authentication", "collection not found"]):
+            return ErrorSeverity.HIGH
+        elif any(keyword in error_message for keyword in ["timeout", "rate limit"]):
+            return ErrorSeverity.MEDIUM
+        else:
+            return ErrorSeverity.LOW
+
     async def _retrieve_relevant_chunks(
         self,
         bot: Bot,

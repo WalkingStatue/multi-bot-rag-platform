@@ -542,3 +542,297 @@ async def get_embedding_dimension_info(
         
     finally:
         await compatibility_manager.close()
+
+
+# Adaptive Threshold Management Endpoints
+
+@router.get("/{bot_id}/threshold/info", response_model=Dict[str, Any])
+async def get_threshold_info(
+    bot_id: uuid.UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_bot_view)
+):
+    """
+    Get threshold configuration information for a bot.
+    
+    Requires viewer role or higher.
+    
+    Args:
+        bot_id: Bot identifier
+    """
+    from ..services.adaptive_retrieval_engine import AdaptiveRetrievalEngine
+    
+    try:
+        # Get bot configuration
+        bot_service = BotService(db)
+        bot = bot_service.get_bot(bot_id, current_user.id)
+        
+        if not bot:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Bot not found"
+            )
+        
+        # Get threshold information
+        retrieval_engine = AdaptiveRetrievalEngine(db)
+        threshold_info = retrieval_engine.get_threshold_info(
+            bot.embedding_provider, 
+            bot.embedding_model
+        )
+        
+        return {
+            "bot_id": str(bot_id),
+            "provider": bot.embedding_provider,
+            "model": bot.embedding_model,
+            "threshold_config": threshold_info
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get threshold info: {str(e)}"
+        )
+
+
+@router.post("/{bot_id}/threshold/calculate", response_model=Dict[str, Any])
+async def calculate_adaptive_threshold(
+    bot_id: uuid.UUID,
+    request_data: Dict[str, Any],
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_bot_view)
+):
+    """
+    Calculate adaptive threshold for given context.
+    
+    Requires viewer role or higher.
+    
+    Args:
+        bot_id: Bot identifier
+        request_data: Context data including content_type, document_count, etc.
+    """
+    from ..services.adaptive_retrieval_engine import AdaptiveRetrievalEngine
+    
+    try:
+        # Get bot configuration
+        bot_service = BotService(db)
+        bot = bot_service.get_bot(bot_id, current_user.id)
+        
+        if not bot:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Bot not found"
+            )
+        
+        # Extract context parameters
+        content_type = request_data.get("content_type", "general")
+        document_count = request_data.get("document_count", 0)
+        avg_document_length = request_data.get("avg_document_length")
+        
+        # Calculate adaptive threshold
+        retrieval_engine = AdaptiveRetrievalEngine(db)
+        calculated_threshold = retrieval_engine.calculate_adaptive_threshold(
+            provider=bot.embedding_provider,
+            model=bot.embedding_model,
+            content_type=content_type,
+            document_count=document_count,
+            avg_document_length=avg_document_length
+        )
+        
+        return {
+            "bot_id": str(bot_id),
+            "provider": bot.embedding_provider,
+            "model": bot.embedding_model,
+            "context": {
+                "content_type": content_type,
+                "document_count": document_count,
+                "avg_document_length": avg_document_length
+            },
+            "calculated_threshold": calculated_threshold
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to calculate threshold: {str(e)}"
+        )
+
+
+@router.get("/{bot_id}/threshold/recommendations", response_model=Dict[str, Any])
+async def get_threshold_recommendations(
+    bot_id: uuid.UUID,
+    days: int = 7,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_bot_view)
+):
+    """
+    Get threshold optimization recommendations based on performance history.
+    
+    Requires viewer role or higher.
+    
+    Args:
+        bot_id: Bot identifier
+        days: Number of days to analyze (default: 7)
+    """
+    from ..services.adaptive_retrieval_engine import AdaptiveRetrievalEngine
+    
+    try:
+        # Get bot configuration
+        bot_service = BotService(db)
+        bot = bot_service.get_bot(bot_id, current_user.id)
+        
+        if not bot:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Bot not found"
+            )
+        
+        # Get optimization recommendations
+        retrieval_engine = AdaptiveRetrievalEngine(db)
+        recommendations = await retrieval_engine.optimize_retrieval_parameters(
+            bot_id, days
+        )
+        
+        return {
+            "bot_id": str(bot_id),
+            "analysis_period_days": days,
+            "recommendations": [
+                {
+                    "type": rec.suggestion_type,
+                    "current_value": rec.current_value,
+                    "suggested_value": rec.suggested_value,
+                    "expected_improvement": rec.expected_improvement,
+                    "confidence": rec.confidence,
+                    "metadata": rec.metadata
+                }
+                for rec in recommendations
+            ]
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get recommendations: {str(e)}"
+        )
+
+
+@router.get("/{bot_id}/threshold/performance", response_model=Dict[str, Any])
+async def get_threshold_performance(
+    bot_id: uuid.UUID,
+    days: int = 7,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_bot_view)
+):
+    """
+    Get performance summary for a bot's retrieval operations.
+    
+    Requires viewer role or higher.
+    
+    Args:
+        bot_id: Bot identifier
+        days: Number of days to analyze (default: 7)
+    """
+    from ..services.adaptive_retrieval_engine import AdaptiveRetrievalEngine
+    
+    try:
+        # Get bot configuration
+        bot_service = BotService(db)
+        bot = bot_service.get_bot(bot_id, current_user.id)
+        
+        if not bot:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Bot not found"
+            )
+        
+        # Get performance summary
+        retrieval_engine = AdaptiveRetrievalEngine(db)
+        performance_summary = await retrieval_engine.get_performance_summary(
+            bot_id, days
+        )
+        
+        return {
+            "bot_id": str(bot_id),
+            "performance_summary": performance_summary
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get performance summary: {str(e)}"
+        )
+
+
+@router.post("/{bot_id}/threshold/validate", response_model=Dict[str, Any])
+async def validate_custom_threshold(
+    bot_id: uuid.UUID,
+    request_data: Dict[str, Any],
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+    _: bool = Depends(require_bot_view)
+):
+    """
+    Validate a custom threshold configuration.
+    
+    Requires viewer role or higher.
+    
+    Args:
+        bot_id: Bot identifier
+        request_data: Data containing the custom threshold to validate
+    """
+    from ..services.adaptive_threshold_manager import AdaptiveThresholdManager
+    
+    try:
+        # Get bot configuration
+        bot_service = BotService(db)
+        bot = bot_service.get_bot(bot_id, current_user.id)
+        
+        if not bot:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Bot not found"
+            )
+        
+        # Extract threshold to validate
+        custom_threshold = request_data.get("threshold")
+        if custom_threshold is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Threshold value is required"
+            )
+        
+        # Validate threshold
+        threshold_manager = AdaptiveThresholdManager(db)
+        is_valid, issues = threshold_manager.validate_threshold_configuration(
+            bot.embedding_provider,
+            bot.embedding_model,
+            custom_threshold
+        )
+        
+        return {
+            "bot_id": str(bot_id),
+            "provider": bot.embedding_provider,
+            "model": bot.embedding_model,
+            "threshold": custom_threshold,
+            "is_valid": is_valid,
+            "issues": issues
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to validate threshold: {str(e)}"
+        )
