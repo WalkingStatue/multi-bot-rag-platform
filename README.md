@@ -224,6 +224,12 @@ docker compose exec backend alembic downgrade -1
 4. Run tests: `.\scripts\test-runner.ps1 -TestType all`
 5. Submit a pull request
 
+### Project Rules (Summary)
+- EditorConfig enforces whitespace and line-endings across editors
+- Frontend uses ESLint + Prettier; run `npm run lint` and `npm run format`
+- Backend uses Black, isort, Ruff, MyPy; run `black . && isort . && ruff check . && mypy app`
+- Follow Conventional Commits and use focused PRs; see `CONTRIBUTING.md`
+
 ## 📄 License
 
 [Your License Here]

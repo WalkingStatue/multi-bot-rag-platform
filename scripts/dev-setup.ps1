@@ -8,7 +8,8 @@ param(
     [switch]$Migrate,
     [switch]$Seed,
     [switch]$Test,
-    [switch]$Verbose
+    [switch]$Verbose,
+    [switch]$Install
 )
 
 Write-Host "🚀 Multi-Bot RAG Platform Setup" -ForegroundColor Green
@@ -61,6 +62,22 @@ function Setup-Environment {
             exit 1
         }
         Write-Host "✅ Created .env file" -ForegroundColor Green
+    }
+
+    if ($Install) {
+        Write-Host "📦 Installing frontend dependencies..." -ForegroundColor Yellow
+        Push-Location "$PSScriptRoot/../frontend"
+        npm ci
+        Pop-Location
+
+        Write-Host "🐍 Ensuring Python venv and backend dependencies..." -ForegroundColor Yellow
+        Push-Location "$PSScriptRoot/../backend"
+        if (-not (Test-Path ".venv")) {
+            python -m venv .venv
+        }
+        & .\.venv\Scripts\pip.exe install --upgrade pip
+        & .\.venv\Scripts\pip.exe install -r requirements.txt
+        Pop-Location
     }
 }
 

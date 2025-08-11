@@ -30,23 +30,45 @@ function Ensure-ServicesRunning {
 # Run backend tests
 function Run-BackendTests {
     Write-Host "🐍 Running backend tests..." -ForegroundColor Yellow
-    
-    $args = @("exec", "backend", "python", "-m", "pytest")
-    
+
+    $args = @("exec", "backend", "python", "-m", "pytest", "tests/")
+
     switch ($TestType) {
-        "unit" { $args += "tests/unit/" }
-        "integration" { $args += "../tests/integration/" }
-        "backend" { $args += "tests/", "../tests/integration/" }
-        "all" { $args += "tests/", "../tests/integration/" }
+        "unit" { $args = @("exec", "backend", "python", "-m", "pytest", "tests/unit/") }
+        # Integration tests at repo root are handled separately in Run-IntegrationTests
+        "backend" { $args = @("exec", "backend", "python", "-m", "pytest", "tests/") }
+        "all" { $args = @("exec", "backend", "python", "-m", "pytest", "tests/") }
     }
-    
-    if ($Coverage) { $args += "--cov=app", "--cov-report=html:../test-coverage/" }
+
+    if ($Coverage) { $args += "--cov=app", "--cov-report=html:/app/coverage" }
     if ($Verbose) { $args += "-v" }
     if ($Pattern) { $args += "-k", $Pattern }
-    
+
     docker compose $args
-    
+
     return $LASTEXITCODE -eq 0
+}
+
+function Run-IntegrationTests {
+    if ($TestType -in @("integration", "all")) {
+        Write-Host "🌐 Running repo-level integration tests..." -ForegroundColor Yellow
+
+        $srcTests = (Resolve-Path "$PSScriptRoot/../tests").Path
+        $destTests = (Resolve-Path "$PSScriptRoot/../backend").Path + "\repo-tests"
+
+        if (Test-Path $destTests) { Remove-Item -Recurse -Force $destTests }
+        Copy-Item -Recurse -Force $srcTests $destTests
+
+        $args = @("exec", "backend", "python", "-m", "pytest", "repo-tests/integration/")
+        if ($Verbose) { $args += "-v" }
+        if ($Pattern) { $args += "-k", $Pattern }
+
+        docker compose $args
+
+        return $LASTEXITCODE -eq 0
+    }
+
+    return $true
 }
 
 # Run frontend tests
@@ -66,8 +88,12 @@ Ensure-ServicesRunning
 
 $success = $true
 
-if ($TestType -in @("all", "unit", "integration", "backend")) {
+if ($TestType -in @("all", "unit", "backend", "integration")) {
     $success = (Run-BackendTests) -and $success
+}
+
+if ($TestType -in @("all", "integration")) {
+    $success = (Run-IntegrationTests) -and $success
 }
 
 if ($TestType -in @("all", "frontend")) {
@@ -78,8 +104,13 @@ if ($success) {
     Write-Host ""
     Write-Host "🎉 All tests passed!" -ForegroundColor Green
     
-    if ($Coverage -and (Test-Path "test-coverage")) {
-        Write-Host "📊 Coverage report: test-coverage/index.html" -ForegroundColor Cyan
+    if ($Coverage) {
+        if (Test-Path "backend/coverage/index.html") {
+            Write-Host "📊 Backend coverage: backend/coverage/index.html" -ForegroundColor Cyan
+        }
+        if (Test-Path "frontend/coverage/index.html") {
+            Write-Host "📊 Frontend coverage: frontend/coverage/index.html" -ForegroundColor Cyan
+        }
     }
     
     exit 0
