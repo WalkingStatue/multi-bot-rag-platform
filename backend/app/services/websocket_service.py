@@ -66,7 +66,7 @@ class ConnectionManager:
         logger.info(f"User {user_id} connected with connection {connection_id}")
         return connection_id
     
-    def disconnect(self, connection_id: str):
+    async def disconnect(self, connection_id: str):
         """
         Disconnect a WebSocket connection.
         
@@ -80,8 +80,14 @@ class ConnectionManager:
         user_id = metadata["user_id"]
         bot_id = metadata.get("bot_id")
         
-        # Remove from active connections
+        # Close and remove from active connections
         if user_id in self.active_connections:
+            websocket = self.active_connections[user_id].get(connection_id)
+            if websocket:
+                try:
+                    await websocket.close()
+                except Exception as e:
+                    logger.warning(f"Error closing WebSocket: {e}")
             self.active_connections[user_id].pop(connection_id, None)
             if not self.active_connections[user_id]:
                 del self.active_connections[user_id]

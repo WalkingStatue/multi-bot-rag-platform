@@ -58,4 +58,60 @@ class TestEmbeddingConfigurationValidator:
         """Test successful provider/model validation."""
         # Mock dependencies
         with patch.object(validator, 'embedding_service', mock_embedding_service), \
-             patch.ob
+             patch.object(validator, 'user_service', mock_user_service):
+            
+            # Test data
+            bot = Mock(spec=Bot)
+            bot.embedding_provider = "openai"
+            bot.embedding_model = "text-embedding-3-small"
+            bot.user_id = uuid.uuid4()
+            
+            # Execute validation
+            result = await validator.validate_provider_model_combination(bot)
+            
+            # Assertions
+            assert result.is_valid is True
+            assert len(result.issues) == 0
+            mock_embedding_service.validate_api_key.assert_called_once()
+    
+    @pytest.mark.asyncio
+    async def test_validate_provider_model_combination_invalid_provider(self, validator, mock_embedding_service, mock_user_service):
+        """Test validation failure for invalid provider."""
+        with patch.object(validator, 'embedding_service', mock_embedding_service), \
+             patch.object(validator, 'user_service', mock_user_service):
+            
+            # Test data with invalid provider
+            bot = Mock(spec=Bot)
+            bot.embedding_provider = "invalid_provider"
+            bot.embedding_model = "text-embedding-3-small"
+            bot.user_id = uuid.uuid4()
+            
+            # Execute validation
+            result = await validator.validate_provider_model_combination(bot)
+            
+            # Assertions
+            assert result.is_valid is False
+            assert len(result.issues) == 1
+            assert result.issues[0].severity == ValidationSeverity.ERROR
+            assert "invalid_provider" in result.issues[0].message
+    
+    @pytest.mark.asyncio
+    async def test_validate_provider_model_combination_invalid_model(self, validator, mock_embedding_service, mock_user_service):
+        """Test validation failure for invalid model."""
+        with patch.object(validator, 'embedding_service', mock_embedding_service), \
+             patch.object(validator, 'user_service', mock_user_service):
+            
+            # Test data with invalid model
+            bot = Mock(spec=Bot)
+            bot.embedding_provider = "openai"
+            bot.embedding_model = "invalid_model"
+            bot.user_id = uuid.uuid4()
+            
+            # Execute validation
+            result = await validator.validate_provider_model_combination(bot)
+            
+            # Assertions
+            assert result.is_valid is False
+            assert len(result.issues) == 1
+            assert result.issues[0].severity == ValidationSeverity.ERROR
+            assert "invalid_model" in result.issues[0].message

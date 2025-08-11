@@ -136,7 +136,7 @@ async def get_system_analytics(
 @router.get("/bots/{bot_id}/export", response_model=BotExportData)
 async def export_bot_data(
     bot_id: str,
-    format_type: str = Query("json", regex="^(json|csv)$", description="Export format"),
+    format_type: str = Query("json", pattern="^(json|csv)$", description="Export format"),
     include_messages: bool = Query(True, description="Include conversation messages"),
     include_documents: bool = Query(True, description="Include document metadata"),
     include_activity: bool = Query(True, description="Include activity logs"),

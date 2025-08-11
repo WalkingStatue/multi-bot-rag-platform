@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db
-from ..core.dependencies import get_auth_service
+from ..core.dependencies import get_auth_service, get_current_active_user
 from ..schemas.user import (
     UserCreate, UserLogin, UserResponse, Token, RefreshToken,
     PasswordReset, PasswordResetConfirm, PasswordChange
@@ -93,8 +93,8 @@ async def forgot_password(
     # In a real application, you would send this token via email
     # For development/testing, we return it in the response
     return {
-        "message": "Password reset token generated",
-        "reset_token": reset_token  # Remove this in production
+        "message": "Password reset instructions sent to your email",
+        "note": "In development mode, check the server logs for the reset token"
     }
 
 
@@ -126,6 +126,7 @@ async def reset_password(
 @router.post("/change-password", status_code=status.HTTP_200_OK)
 async def change_password(
     password_data: PasswordChange,
+    current_user: User = Depends(get_current_active_user),
     auth_service: AuthService = Depends(get_auth_service)
 ):
     """
@@ -133,18 +134,24 @@ async def change_password(
     
     Args:
         password_data: Password change data
+        current_user: Current authenticated user
         auth_service: Authentication service
         
     Returns:
         Success message
     """
-    # For change password, we need to get current user from the token
-    # This endpoint would need authentication middleware in a real implementation
-    # For now, we'll implement it as a separate authenticated endpoint
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Change password requires authentication - use /users/change-password instead"
+    success = auth_service.change_password(
+        current_user, 
+        password_data.current_password, 
+        password_data.new_password
     )
+    if success:
+        return {"message": "Password changed successfully"}
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to change password"
+        )
 
 
 @router.post("/logout", status_code=status.HTTP_200_OK)

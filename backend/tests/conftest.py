@@ -17,9 +17,9 @@ from app.core.config import settings
 import os
 
 # Check if we're running in Docker or locally
-if os.getenv("DOCKER_ENV") == "true":
-    # Docker environment - use service names
-    SQLALCHEMY_DATABASE_URL = "postgresql://postgres:password@postgres:5432/multi_bot_rag_test"
+if os.getenv("DATABASE_URL") and "postgres:" in os.getenv("DATABASE_URL"):
+    # Docker environment - use service names from DATABASE_URL
+    SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL").replace("/multi_bot_rag", "/multi_bot_rag_test")
 else:
     # Local environment - use localhost
     SQLALCHEMY_DATABASE_URL = "postgresql://postgres:password@localhost:5432/multi_bot_rag_test"

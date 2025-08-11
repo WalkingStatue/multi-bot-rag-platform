@@ -105,7 +105,7 @@ async def process_document(
 async def list_documents(
     bot_id: UUID,
     skip: int = Query(0, ge=0, description="Number of documents to skip"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximum number of documents to return"),
+    limit: int = Query(20, ge=1, le=100, description="Maximum number of documents to return"),
     current_user: User = Depends(get_current_user),
     document_service: DocumentService = Depends(get_document_service)
 ):

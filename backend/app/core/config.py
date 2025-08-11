@@ -4,6 +4,7 @@ Application configuration settings.
 import os
 from typing import Optional
 from pydantic_settings import BaseSettings
+from pydantic import validator
 
 
 class Settings(BaseSettings):
@@ -19,7 +20,7 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     
     # Security
-    secret_key: str = "your-secret-key-change-in-production"
+    secret_key: str = os.getenv("SECRET_KEY", "")
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
@@ -38,6 +39,14 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+    
+    @validator('secret_key')
+    def validate_secret_key(cls, v):
+        if not v:
+            raise ValueError("SECRET_KEY environment variable is required")
+        if len(v) < 32:
+            raise ValueError("SECRET_KEY must be at least 32 characters long")
+        return v
 
 
 # Global settings instance

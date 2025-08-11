@@ -144,7 +144,7 @@ async def websocket_chat_endpoint(
     finally:
         # Clean up connection
         if connection_id:
-            connection_manager.disconnect(connection_id)
+            await connection_manager.disconnect(connection_id)
 
 
 @router.websocket("/ws/notifications")
@@ -239,7 +239,7 @@ async def websocket_notifications_endpoint(
     finally:
         # Clean up connection
         if connection_id:
-            connection_manager.disconnect(connection_id)
+            await connection_manager.disconnect(connection_id)
 
 
 @router.get("/ws/stats")

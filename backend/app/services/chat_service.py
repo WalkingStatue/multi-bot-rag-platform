@@ -65,7 +65,13 @@ class ChatService:
         # Configuration
         self.max_history_messages = 10
         self.max_retrieved_chunks = 5
-        self.similarity_threshold = 0.3  # Adjusted threshold for Gemini embeddings (cosine similarity)
+        # Model/provider-specific similarity thresholds with sane defaults
+        self.similarity_thresholds = {
+            "openai": {"text-embedding-ada-002": 0.3, "text-embedding-3-small": 0.25},
+            "gemini": {"embedding-001": 0.2, "text-embedding-004": 0.15},
+            "anthropic": {"claude-3-haiku": 0.25},
+        }
+        self.default_similarity_threshold = 0.3
         self.max_prompt_length = 8000
         self.enable_graceful_degradation = True
     
@@ -520,9 +526,27 @@ class ChatService:
                     stored_dimension = collection_info.get('config', {}).get('vector_size', 0)
                     
                     if stored_dimension != expected_dimension:
-                        logger.error(f"Dimension mismatch: stored={stored_dimension}, expected={expected_dimension}")
-                        logger.error(f"Documents were processed with different embedding model. Please reprocess documents.")
-                        return []
+                        logger.error(
+                            f"Dimension mismatch: stored={stored_dimension}, expected={expected_dimension}"
+                        )
+                        error_msg = (
+                            "Embedding dimension mismatch detected. Documents were processed with "
+                            f"{stored_dimension}D embeddings, but current model expects {expected_dimension}D. "
+                            "Please reprocess documents or change embedding model."
+                        )
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail={
+                                "error": "dimension_mismatch",
+                                "message": error_msg,
+                                "stored_dimension": stored_dimension,
+                                "expected_dimension": expected_dimension,
+                                "remediation": [
+                                    "Reprocess all documents with current embedding model",
+                                    "Or change bot's embedding model to match stored embeddings",
+                                ],
+                            },
+                        )
                     
                     logger.info(f"Embedding dimensions match: {expected_dimension}")
                     
@@ -565,11 +589,18 @@ class ChatService:
             # Search for relevant chunks with improved error handling
             try:
                 logger.info(f"Searching vector store for bot {bot.id} with {len(query_embedding)} dimensional embedding")
+                # Determine threshold for current provider/model
+                provider_thresholds = self.similarity_thresholds.get(bot.embedding_provider, {})
+                score_threshold = provider_thresholds.get(
+                    embedding_model,
+                    self.default_similarity_threshold,
+                )
+
                 relevant_chunks = await self.vector_service.search_relevant_chunks(
                     bot_id=str(bot.id),
                     query_embedding=query_embedding,
                     top_k=self.max_retrieved_chunks,
-                    score_threshold=self.similarity_threshold
+                    score_threshold=score_threshold
                 )
                 
                 logger.info(f"Retrieved {len(relevant_chunks)} relevant chunks for bot {bot.id}")
@@ -580,7 +611,7 @@ class ChatService:
                         preview = chunk.get('text', '')[:100] + '...' if len(chunk.get('text', '')) > 100 else chunk.get('text', '')
                         logger.info(f"Chunk {i+1} (score: {chunk.get('score', 'N/A')}): {preview}")
                 else:
-                    logger.info(f"No relevant chunks found for bot {bot.id} with similarity threshold {self.similarity_threshold}")
+                    logger.info(f"No relevant chunks found for bot {bot.id} with similarity threshold {score_threshold}")
                     # FIXED: Lower similarity threshold temporarily to see if there are any matches
                     logger.info(f"Trying with lower similarity threshold (0.5) to debug...")
                     debug_chunks = await self.vector_service.search_relevant_chunks(

@@ -4,13 +4,17 @@ Unit tests for text processing utilities.
 import pytest
 from pathlib import Path
 from io import BytesIO
-import PyPDF2
 
 from app.utils.text_processing import (
     DocumentExtractor,
     TextChunker,
+    SemanticTextChunker,
     TextChunk,
-    DocumentProcessor
+    DocumentProcessor,
+    ChunkingConfig,
+    ChunkingStrategy,
+    DocumentFormat,
+    ChunkingOptimizer
 )
 
 
@@ -373,7 +377,16 @@ class TestDocumentProcessor:
     def test_custom_chunk_parameters(self):
         """Test processor with custom chunking parameters."""
         content = b"Word " * 100  # Create long content
-        processor = DocumentProcessor(chunk_size=50, chunk_overlap=15)
+        
+        # Use legacy chunking to ensure predictable behavior for this test
+        from app.utils.text_processing import ChunkingConfig, ChunkingStrategy
+        legacy_config = ChunkingConfig(
+            chunk_size=50,
+            chunk_overlap=15,
+            strategy=ChunkingStrategy.LEGACY
+        )
+        
+        processor = DocumentProcessor(chunking_config=legacy_config)
         
         chunks, _ = processor.process_document(
             file_content=content,
