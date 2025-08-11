@@ -12,6 +12,8 @@ import { ProfilePage } from './pages/ProfilePage';
 import { CollaborationPage } from './pages/CollaborationPage';
 import DocumentManagementPage from './pages/DocumentManagementPage';
 import { ChatPage } from './pages/ChatPage';
+import TerminalLoggingExample from './components/common/TerminalLoggingExample';
+import { useTerminalLogger } from './hooks/useTerminalLogger';
 
 function App() {
   return (

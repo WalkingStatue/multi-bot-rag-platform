@@ -91,7 +91,6 @@ export const useChat = (bot?: BotResponse) => {
       };
 
     } catch (error) {
-      console.error('Failed to initialize chat:', error);
       setConnectionStatus({
         status: 'error',
         error: 'Failed to initialize chat'
@@ -111,7 +110,6 @@ export const useChat = (bot?: BotResponse) => {
       setMessages(newSession.id, []);
       return newSession;
     } catch (error) {
-      console.error('Failed to create session:', error);
       return null;
     }
   }, []);
@@ -123,7 +121,7 @@ export const useChat = (bot?: BotResponse) => {
       const messages = await chatService.getSessionMessages(sessionId);
       setMessages(sessionId, messages.map(msg => ({ ...msg, status: 'sent' as const })));
     } catch (error) {
-      console.error('Failed to load session messages:', error);
+      // Failed to load session messages
     } finally {
       setLoading(false);
     }
@@ -188,8 +186,6 @@ export const useChat = (bot?: BotResponse) => {
       return true;
 
     } catch (error) {
-      console.error('Failed to send message:', error);
-      
       // Update temp message to show error
       updateMessage(sessionId, tempId, { status: 'error' });
       

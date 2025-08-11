@@ -121,11 +121,6 @@ export class BotService {
         modelsSource = dynamicModels.source;
       } catch (error: any) {
         // Use static models if dynamic fetch fails
-        if (error.response?.status === 400) {
-          console.log(`No API key configured for ${providerKey}, using static models`);
-        } else {
-          console.warn(`Failed to fetch dynamic models for ${providerKey}, using static models`);
-        }
       }
       
       // Convert model strings to model objects

@@ -27,7 +27,7 @@ export const runWebSocketDiagnostics = async (
   const results: DiagnosticResult[] = [];
   const timestamp = new Date().toISOString();
 
-  console.log('Running WebSocket diagnostics for bot:', botId);
+
 
   // Test 1: Network connectivity
   try {
@@ -265,14 +265,7 @@ export const runWebSocketDiagnostics = async (
     summary
   };
 
-  // Log results
-  console.group('WebSocket Diagnostics Results');
-  console.log('Summary:', summary);
-  results.forEach(result => {
-    const logLevel = result.status === 'pass' ? 'log' : result.status === 'warning' ? 'warn' : 'error';
-    console[logLevel](`${result.test}: ${result.message}`, result.details);
-  });
-  console.groupEnd();
+  // Diagnostics completed
 
   return diagnostics;
 };

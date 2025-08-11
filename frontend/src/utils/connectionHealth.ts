@@ -53,7 +53,7 @@ export class ConnectionHealthMonitor {
       try {
         listener(this.status);
       } catch (error) {
-        console.error('Error in connection health listener:', error);
+        // Error in connection health listener
       }
     });
   }

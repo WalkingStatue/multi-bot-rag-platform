@@ -12,6 +12,7 @@ import { BulkPermissionManager } from '../components/bots/BulkPermissionManager'
 import { NotificationSystem } from '../components/common/NotificationSystem';
 import { Alert } from '../components/common/Alert';
 import { Button } from '../components/common/Button';
+import { AuthDebug } from '../components/debug/AuthDebug';
 
 interface CollaborationPageProps {
   botId?: string;
@@ -287,6 +288,9 @@ export const CollaborationPage: React.FC<CollaborationPageProps> = ({ botId: pro
           </div>
         </div>
       )}
+
+      {/* Debug component - remove in production */}
+      <AuthDebug />
     </div>
   );
 }; 

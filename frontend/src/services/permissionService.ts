@@ -16,8 +16,12 @@ export class PermissionService {
    * Get all permissions for a bot
    */
   async getBotPermissions(botId: string): Promise<BotPermission[]> {
-    const response = await apiClient.get(`/bots/${botId}/permissions`);
-    return response.data;
+    try {
+      const response = await apiClient.get(`/bots/${botId}/permissions`);
+      return response.data;
+    } catch (error: any) {
+      throw error;
+    }
   }
 
   /**
@@ -90,9 +94,9 @@ export class PermissionService {
    */
   async getUserBotRole(botId: string): Promise<string | null> {
     try {
-      const response = await apiClient.get(`/bots/${botId}/permissions/me`);
+      const response = await apiClient.get(`/bots/${botId}/permissions/my-role`);
       return response.data.role;
-    } catch (error) {
+    } catch (error: any) {
       return null;
     }
   }

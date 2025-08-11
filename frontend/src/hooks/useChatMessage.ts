@@ -94,8 +94,6 @@ export const useChatMessage = ({
       addMessage(sessionId, assistantMessage);
 
     } catch (error: any) {
-      console.error('Failed to send message:', error);
-
       // Parse the error
       const chatError: ChatError = error.chatError || {
         type: 'unknown',

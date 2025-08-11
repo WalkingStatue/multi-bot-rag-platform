@@ -81,13 +81,9 @@ class APIClient {
             const retryAfter = error.response.headers['retry-after'];
             const delay = retryAfter ? parseInt(retryAfter) * 1000 : baseDelay;
             
-            console.log(`Rate limited${isOpenRouterRateLimit ? ' (OpenRouter)' : ''}. Retrying after ${delay}ms (attempt ${originalRequest._retryCount}/${maxRetries})`);
-            
             await new Promise(resolve => setTimeout(resolve, delay));
             return this.client(originalRequest);
           } else {
-            console.log(`Rate limit retry exhausted${isOpenRouterRateLimit ? ' (OpenRouter)' : ''}, failing request`);
-            
             // Enhance error message for OpenRouter rate limits
             if (isOpenRouterRateLimit) {
               error.isOpenRouterRateLimit = true;

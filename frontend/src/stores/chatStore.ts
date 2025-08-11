@@ -121,7 +121,6 @@ export const useChatStore = create<ChatStore>()(
         });
         
         if (messageExists) {
-          console.log('Message already exists, skipping duplicate:', message.id || message.tempId || 'no-id');
           return state; // Return unchanged state
         }
         

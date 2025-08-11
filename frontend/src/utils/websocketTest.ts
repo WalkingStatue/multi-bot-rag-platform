@@ -7,7 +7,7 @@ export function testWebSocketConnection(botId: string, token: string): Promise<{
     const wsUrl = (import.meta as any).env?.VITE_WS_URL || 'ws://localhost:8000';
     const chatUrl = `${wsUrl}/api/ws/chat/${botId}?token=${encodeURIComponent(token)}`;
     
-    console.log('Testing WebSocket connection to:', chatUrl.replace(token, '[TOKEN_HIDDEN]'));
+
     
     let socket: WebSocket;
     let resolved = false;
@@ -30,7 +30,6 @@ export function testWebSocketConnection(botId: string, token: string): Promise<{
       socket = new WebSocket(chatUrl);
       
       socket.onopen = (event) => {
-        console.log('WebSocket opened successfully:', event);
         if (!resolved) {
           resolved = true;
           clearTimeout(timeout);
@@ -44,7 +43,6 @@ export function testWebSocketConnection(botId: string, token: string): Promise<{
       };
 
       socket.onerror = (error) => {
-        console.error('WebSocket error:', error);
         if (!resolved) {
           resolved = true;
           clearTimeout(timeout);
@@ -57,7 +55,6 @@ export function testWebSocketConnection(botId: string, token: string): Promise<{
       };
 
       socket.onclose = (event) => {
-        console.log('WebSocket closed:', event.code, event.reason);
         if (!resolved) {
           resolved = true;
           clearTimeout(timeout);
@@ -74,19 +71,17 @@ export function testWebSocketConnection(botId: string, token: string): Promise<{
       };
 
       socket.onmessage = (event) => {
-        console.log('WebSocket message received:', event.data);
         try {
           const message = JSON.parse(event.data);
           if (message.type === 'connection_established') {
-            console.log('Connection established message received:', message);
+            // Connection established
           }
         } catch (e) {
-          console.log('Non-JSON message received:', event.data);
+          // Non-JSON message received
         }
       };
 
     } catch (error: any) {
-      console.error('Failed to create WebSocket:', error);
       if (!resolved) {
         resolved = true;
         clearTimeout(timeout);

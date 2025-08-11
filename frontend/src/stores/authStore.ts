@@ -212,7 +212,6 @@ export const useAuthStore = create<AuthStore>()(
             });
           }
         } catch (error) {
-          console.error('Auth initialization failed:', error);
           // Token is invalid, clear it
           authService.clearTokens();
           set({

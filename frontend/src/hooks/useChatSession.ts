@@ -58,7 +58,6 @@ export const useChatSession = ({
 
     // Prevent duplicate initialization for the same bot
     if (isInitialized.current && currentBotId === botId) {
-      console.log('Chat sessions already initialized for bot:', botId);
       return;
     }
 
@@ -70,8 +69,6 @@ export const useChatSession = ({
       errorState.current = null;
       clearError();
 
-      console.log('Initializing chat sessions for bot:', botId);
-
       // Load sessions
       const botSessions = await chatService.getSessions(botId);
       setSessions(botSessions);
@@ -80,9 +77,7 @@ export const useChatSession = ({
       if (!chatWebSocketService.isConnected() || chatWebSocketService.getCurrentBotId() !== botId) {
         try {
           await chatWebSocketService.connectToBot(botId, token);
-          console.log('WebSocket connection established successfully');
         } catch (wsError) {
-          console.warn('WebSocket connection failed, will use REST API fallback:', wsError);
           // Don't fail the entire initialization if WebSocket fails
           // The system will fall back to REST API calls
           setConnectionStatus({
@@ -98,10 +93,8 @@ export const useChatSession = ({
       }
 
       isInitialized.current = true;
-      console.log('Chat sessions initialized successfully');
 
     } catch (error: any) {
-      console.error('Failed to initialize chat sessions:', error);
       
       // Handle specific error types
       const chatError = error.chatError;
@@ -125,7 +118,6 @@ export const useChatSession = ({
   // Internal session selection with message loading
   const selectSessionInternal = useCallback(async (sessionId: string, setLoading = true) => {
     if (loadingSessionId.current === sessionId) {
-      console.log('Session already being loaded:', sessionId);
       return;
     }
 
@@ -136,7 +128,6 @@ export const useChatSession = ({
         useChatStore.getState().setLoading(true);
       }
 
-      console.log('Selecting session:', sessionId);
       setCurrentSession(sessionId);
 
       // Sync WebSocket to new session
@@ -147,16 +138,13 @@ export const useChatSession = ({
         try {
           const messages = await chatService.getSessionMessages(sessionId);
           setMessages(sessionId, messages.map(msg => ({ ...msg, status: 'sent' as const })));
-          console.log('Loaded messages for session:', sessionId, messages.length);
         } catch (messageError) {
-          console.error('Failed to load session messages:', messageError);
           // Don't fail the entire session selection if messages fail to load
           setMessages(sessionId, []);
         }
       }
 
     } catch (error) {
-      console.error('Failed to select session:', error);
       errorState.current = 'Failed to load session';
     } finally {
       loadingSessionId.current = null;
@@ -182,7 +170,6 @@ export const useChatSession = ({
       await selectSessionInternal(newSession.id, false);
       return newSession;
     } catch (error: any) {
-      console.error('Failed to create session:', error);
       
       const chatError = error.chatError;
       if (chatError?.type === 'rate_limit') {
@@ -206,7 +193,6 @@ export const useChatSession = ({
       const botSessions = await chatService.getSessions(botId);
       setSessions(botSessions);
     } catch (error: any) {
-      console.error('Failed to refresh sessions:', error);
       
       const chatError = error.chatError;
       if (chatError?.type === 'rate_limit') {

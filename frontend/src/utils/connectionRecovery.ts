@@ -75,7 +75,7 @@ export class ConnectionRecoveryManager {
     let lastError: string | undefined;
     let diagnostics: any;
 
-    console.log('Starting connection recovery for bot:', botId);
+
 
     try {
       const token = authService.getAccessToken();
@@ -91,20 +91,17 @@ export class ConnectionRecoveryManager {
       if (runDiagnostics && attempts === 0) {
         try {
           diagnostics = await runWebSocketDiagnostics(botId, token);
-          console.log('Diagnostics completed:', diagnostics.summary);
         } catch (diagError) {
-          console.error('Failed to run diagnostics:', diagError);
+          // Failed to run diagnostics
         }
       }
 
       while (attempts < maxAttempts) {
         attempts++;
-        console.log(`Recovery attempt ${attempts}/${maxAttempts}`);
 
         try {
           // Check network health before attempting
           if (!connectionHealthMonitor.isHealthy()) {
-            console.log('Network appears unhealthy, waiting before retry');
             await this.delay(Math.min(baseDelay * Math.pow(backoffMultiplier, attempts), maxDelay));
             continue;
           }
@@ -120,7 +117,6 @@ export class ConnectionRecoveryManager {
 
           // Verify connection is actually open
           if (chatWebSocketService.isConnected()) {
-            console.log('Connection recovery successful');
             return {
               success: true,
               attempts,
@@ -132,17 +128,14 @@ export class ConnectionRecoveryManager {
 
         } catch (error) {
           lastError = error instanceof Error ? error.message : 'Unknown error';
-          console.error(`Recovery attempt ${attempts} failed:`, lastError);
 
           if (attempts < maxAttempts) {
             const delay = Math.min(baseDelay * Math.pow(backoffMultiplier, attempts), maxDelay);
-            console.log(`Waiting ${delay}ms before next attempt`);
             await this.delay(delay);
           }
         }
       }
 
-      console.error('Connection recovery failed after all attempts');
       return {
         success: false,
         attempts,
@@ -167,7 +160,6 @@ export class ConnectionRecoveryManager {
    */
   cancelRecovery(): void {
     if (this.recoveryPromise) {
-      console.log('Cancelling connection recovery');
       this.isRecovering = false;
       this.recoveryPromise = null;
     }

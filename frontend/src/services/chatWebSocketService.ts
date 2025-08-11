@@ -28,13 +28,11 @@ export class ChatWebSocketService {
   async connectToBot(botId: string, token: string, sessionId?: string): Promise<void> {
     // Return existing connection promise if already connecting
     if (this.connectionPromise && this.isConnecting) {
-      console.log('Connection already in progress, waiting for completion');
       return this.connectionPromise;
     }
 
     // If already connected to the same bot, just sync session
     if (this.socket?.readyState === WebSocket.OPEN && this.currentBotId === botId) {
-      console.log('Already connected to bot:', botId);
       if (sessionId && sessionId !== this.currentSessionId) {
         this.syncToSession(sessionId);
       }
@@ -44,7 +42,6 @@ export class ChatWebSocketService {
     // Debounce connection attempts
     const now = Date.now();
     if (now - this.lastConnectionAttempt < this.connectionDebounceMs && this.currentBotId === botId) {
-      console.log('Connection attempt debounced, too soon since last attempt');
       return Promise.resolve();
     }
     this.lastConnectionAttempt = now;
@@ -71,7 +68,7 @@ export class ChatWebSocketService {
         const wsUrl = (import.meta as any).env?.VITE_WS_URL || 'ws://localhost:8000';
         const chatUrl = `${wsUrl}/api/ws/chat/${botId}?token=${encodeURIComponent(token)}`;
         
-        console.log('Attempting to connect to chat WebSocket:', chatUrl.replace(token, '[TOKEN]'));
+
         
         // Check if backend is reachable before attempting WebSocket connection
         await this.checkBackendHealth();
@@ -82,7 +79,6 @@ export class ChatWebSocketService {
         // Set connection timeout
         this.connectionTimeout = setTimeout(() => {
           if (this.socket && this.socket.readyState === WebSocket.CONNECTING) {
-            console.log('WebSocket connection timeout, closing...');
             this.socket.close();
             this.notifyListeners('connection', { status: 'error', error: 'Connection timeout' });
             reject(new Error('Connection timeout'));
@@ -90,7 +86,6 @@ export class ChatWebSocketService {
         }, 10000); // 10 second timeout
         
       } catch (error) {
-        console.error('Failed to create WebSocket connection:', error);
         this.notifyListeners('connection', { status: 'error', error: 'Failed to create connection' });
         reject(error);
       } finally {
@@ -115,7 +110,7 @@ export class ChatWebSocketService {
         throw new Error(`Backend not available: ${healthResponse.status}`);
       }
     } catch (error) {
-      console.log('Backend health check failed, attempting WebSocket connection anyway:', error);
+      // Backend health check failed, attempting WebSocket connection anyway
     }
   }
 
@@ -123,7 +118,6 @@ export class ChatWebSocketService {
    * Sync WebSocket to a specific session
    */
   syncToSession(sessionId: string): void {
-    console.log('Syncing WebSocket to session:', sessionId);
     this.currentSessionId = sessionId;
     
     // If connected, send session sync message
@@ -150,8 +144,6 @@ export class ChatWebSocketService {
    * Disconnect from current bot chat
    */
   disconnect(): void {
-    console.log('Disconnecting WebSocket service');
-    
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
       this.pingInterval = null;
@@ -265,10 +257,7 @@ export class ChatWebSocketService {
    */
   private send(data: any): void {
     if (this.socket?.readyState === WebSocket.OPEN) {
-      console.log('Sending WebSocket message:', JSON.stringify(data));
       this.socket.send(JSON.stringify(data));
-    } else {
-      console.warn('Cannot send WebSocket message - connection not open:', this.socket?.readyState);
     }
   }
 
@@ -300,8 +289,6 @@ export class ChatWebSocketService {
     if (!this.socket) return;
 
     this.socket.onopen = () => {
-      console.log('Chat WebSocket connected for bot:', this.currentBotId);
-      
       // Clear connection timeout
       if (this.connectionTimeout) {
         clearTimeout(this.connectionTimeout);
@@ -324,7 +311,6 @@ export class ChatWebSocketService {
     };
 
     this.socket.onclose = (event) => {
-      console.log(`Chat WebSocket disconnected: ${event.code} - ${event.reason || 'No reason provided'}`);
       this.notifyListeners('connection', { 
         status: 'disconnected', 
         code: event.code, 
@@ -339,17 +325,14 @@ export class ChatWebSocketService {
       // Handle different close codes appropriately
       if (event.code === 1000) {
         // Normal closure - don't reconnect
-        console.log('WebSocket closed normally');
       } else if (event.code === 4001 || event.code === 4003) {
         // Authentication errors - don't reconnect
-        console.log('WebSocket closed due to authentication error');
         this.notifyListeners('connection', { 
           status: 'error', 
           error: 'Authentication failed' 
         });
       } else if (event.code === 1006) {
         // Abnormal closure - could be network or server issue
-        console.log('WebSocket closed abnormally, will attempt reconnection');
         setTimeout(() => {
           if (this.token && this.currentBotId && this.reconnectAttempts < this.maxReconnectAttempts) {
             this.handleReconnect();
@@ -357,14 +340,11 @@ export class ChatWebSocketService {
         }, 2000); // Wait 2 seconds before reconnecting
       } else {
         // Other errors - attempt reconnection
-        console.log('WebSocket closed with error code, will attempt reconnection');
         this.handleReconnect();
       }
     };
 
     this.socket.onerror = (error) => {
-      console.error('Chat WebSocket error:', error);
-      console.log('WebSocket readyState at error:', this.socket?.readyState);
       this.notifyListeners('connection', { status: 'error', error: 'Connection error' });
       
       // Reject the connection promise
@@ -378,7 +358,7 @@ export class ChatWebSocketService {
         const message = JSON.parse(event.data);
         this.handleMessage(message);
       } catch (error) {
-        console.error('Error parsing chat WebSocket message:', error, 'Raw data:', event.data);
+        // Error parsing chat WebSocket message
       }
     };
   }
@@ -387,14 +367,10 @@ export class ChatWebSocketService {
    * Handle incoming WebSocket messages
    */
   private handleMessage(message: any): void {
-    console.log('WebSocket message received:', JSON.stringify(message));
-    console.log('Parsed WebSocket message:', message);
-    
     const { type, data } = message;
 
     switch (type) {
       case 'connection_established':
-        console.log('Chat WebSocket connection established:', data);
         break;
       
       case 'chat_message':
@@ -415,11 +391,9 @@ export class ChatWebSocketService {
         break;
       
       case 'error':
-        console.error('Chat WebSocket server error:', data);
         break;
       
       default:
-        console.log('Unknown chat WebSocket message type:', type, data);
     }
   }
 
@@ -433,7 +407,7 @@ export class ChatWebSocketService {
         try {
           callback(data);
         } catch (error) {
-          console.error(`Error in chat WebSocket listener for ${eventType}:`, error);
+          // Error in chat WebSocket listener
         }
       });
     }
@@ -444,7 +418,6 @@ export class ChatWebSocketService {
    */
   private handleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts || !this.token || !this.currentBotId) {
-      console.error('Max reconnection attempts reached or missing connection info');
       this.notifyListeners('connection', { 
         status: 'failed', 
         message: 'Failed to reconnect after maximum attempts' 
@@ -454,7 +427,6 @@ export class ChatWebSocketService {
 
     // Check network health before attempting reconnection
     if (!connectionHealthMonitor.isHealthy()) {
-      console.log('Network appears unhealthy, delaying reconnection');
       setTimeout(() => this.handleReconnect(), 10000);
       return;
     }
@@ -463,14 +435,11 @@ export class ChatWebSocketService {
     // Increase delay more aggressively to avoid rate limiting
     const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 30000);
     
-    console.log(`Attempting to reconnect chat WebSocket (${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${delay}ms`);
-    
     setTimeout(async () => {
       if (this.token && this.currentBotId && connectionHealthMonitor.isHealthy()) {
         try {
           await this.connectToBot(this.currentBotId, this.token, this.currentSessionId || undefined);
         } catch (error) {
-          console.error('Reconnection attempt failed:', error);
           // Continue with normal reconnection logic
           if (this.reconnectAttempts < this.maxReconnectAttempts) {
             this.handleReconnect();
@@ -487,7 +456,6 @@ export class ChatWebSocketService {
     while (this.sessionSyncQueue.length > 0) {
       const syncOp = this.sessionSyncQueue.shift();
       if (syncOp) {
-        console.log('Processing queued session sync:', syncOp.sessionId);
         syncOp.callback();
       }
     }
