@@ -10,9 +10,10 @@ import { permissionService } from '../services/permissionService';
 import { CollaborationManagement } from '../components/bots/CollaborationManagement';
 import { BulkPermissionManager } from '../components/bots/BulkPermissionManager';
 import { NotificationSystem } from '../components/common/NotificationSystem';
-import { Alert } from '../components/common/Alert';
-import { Button } from '../components/common/Button';
+import { Alert, Button, Container } from '../components/common';
 import { AuthDebug } from '../components/debug/AuthDebug';
+import { MainLayout } from '../layouts';
+import { ProtectedRoute } from '../components/auth/ProtectedRoute';
 
 interface CollaborationPageProps {
   botId?: string;
@@ -90,207 +91,229 @@ export const CollaborationPage: React.FC<CollaborationPageProps> = ({ botId: pro
 
   const canManageCollaborators = ['owner', 'admin'].includes(currentUserRole);
 
+  // Header content with back button and bot info
+  const headerContent = bot && (
+    <div className="bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 px-6 py-4 mb-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="text-neutral-400 hover:text-neutral-600 dark:text-neutral-400 dark:hover:text-neutral-200"
+            >
+              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+            </button>
+            <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
+              Collaboration Management
+            </h1>
+          </div>
+          <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+            Manage collaborators and permissions for "{bot.bot.name}"
+          </p>
+        </div>
+        
+        {/* Notification System */}
+        <NotificationSystem
+          botId={botId}
+          onNotificationClick={handleNotificationClick}
+        />
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading collaboration data...</p>
-        </div>
-      </div>
+      <ProtectedRoute>
+        <MainLayout>
+          <Container size="lg" padding="md" centered>
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+              <p className="mt-4 text-neutral-600 dark:text-neutral-400">Loading collaboration data...</p>
+            </div>
+          </Container>
+        </MainLayout>
+      </ProtectedRoute>
     );
   }
 
   if (error) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Alert type="error" message={error} />
-        <div className="mt-4">
-          <Button
-            onClick={() => navigate('/bots')}
-            className="bg-gray-600 hover:bg-gray-700 text-white"
-          >
-            Back to Bots
-          </Button>
-        </div>
-      </div>
+      <ProtectedRoute>
+        <MainLayout>
+          <Container size="lg" padding="md" centered>
+            <Alert type="error" message={error} />
+            <div className="mt-4">
+              <Button
+                onClick={() => navigate('/dashboard')}
+                className="bg-neutral-700 hover:bg-neutral-800 text-white"
+              >
+                Back to Dashboard
+              </Button>
+            </div>
+          </Container>
+        </MainLayout>
+      </ProtectedRoute>
     );
   }
 
   if (!bot) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Alert type="error" message="Bot not found" />
-        <div className="mt-4">
-          <Button
-            onClick={() => navigate('/bots')}
-            className="bg-gray-600 hover:bg-gray-700 text-white"
-          >
-            Back to Bots
-          </Button>
-        </div>
-      </div>
+      <ProtectedRoute>
+        <MainLayout>
+          <Container size="lg" padding="md" centered>
+            <Alert type="error" message="Bot not found" />
+            <div className="mt-4">
+              <Button
+                onClick={() => navigate('/dashboard')}
+                className="bg-neutral-700 hover:bg-neutral-800 text-white"
+              >
+                Back to Dashboard
+              </Button>
+            </div>
+          </Container>
+        </MainLayout>
+      </ProtectedRoute>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center space-x-4">
+    <ProtectedRoute>
+      <MainLayout>
+        {headerContent}
+        
+        <Container size="lg" padding="md" centered>
+          {/* Bot Info Card */}
+          <div className="bg-white dark:bg-neutral-900 shadow rounded-lg p-6 mb-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">{bot.bot.name}</h2>
+                <p className="text-neutral-600 dark:text-neutral-400">{bot.bot.description || 'No description'}</p>
+                <div className="mt-2 flex items-center space-x-4 text-sm text-neutral-500 dark:text-neutral-400">
+                  <span>Your role: <span className="font-medium text-neutral-900 dark:text-neutral-100">{currentUserRole}</span></span>
+                  <span>•</span>
+                  <span>Provider: {bot.bot.llm_provider}</span>
+                  <span>•</span>
+                  <span>Collaboration: {bot.bot.allow_collaboration ? 'Enabled' : 'Disabled'}</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-neutral-500 dark:text-neutral-400">Created</div>
+                <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                  {new Date(bot.bot.created_at).toLocaleDateString()}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Navigation Tabs */}
+          <div className="border-b border-neutral-200 dark:border-neutral-800 mb-8">
+            <nav className="-mb-px flex space-x-8">
               <button
-                onClick={() => navigate('/bots')}
-                className="text-gray-400 hover:text-gray-600"
+                onClick={() => setActiveTab('collaborators')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'collaborators'
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300 dark:text-neutral-400 dark:hover:text-neutral-200 dark:hover:border-neutral-600'
+                }`}
               >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
+                Collaborators
               </button>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Collaboration Management
-              </h1>
-            </div>
-            <p className="mt-2 text-gray-600">
-              Manage collaborators and permissions for "{bot.bot.name}"
-            </p>
+              {canManageCollaborators && (
+                <button
+                  onClick={() => setActiveTab('bulk-update')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'bulk-update'
+                      ? 'border-primary-500 text-primary-600'
+                      : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300 dark:text-neutral-400 dark:hover:text-neutral-200 dark:hover:border-neutral-600'
+                  }`}
+                >
+                  Bulk Update
+                </button>
+              )}
+              <button
+                onClick={() => setActiveTab('activity')}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'activity'
+                    ? 'border-primary-500 text-primary-600'
+                    : 'border-transparent text-neutral-500 hover:text-neutral-700 hover:border-neutral-300 dark:text-neutral-400 dark:hover:text-neutral-200 dark:hover:border-neutral-600'
+                }`}
+              >
+                Activity Log
+              </button>
+            </nav>
           </div>
-          
-          {/* Notification System */}
-          <NotificationSystem
-            botId={botId}
-            onNotificationClick={handleNotificationClick}
-          />
-        </div>
 
-        {/* Bot Info Card */}
-        <div className="mt-6 bg-white shadow rounded-lg p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">{bot.bot.name}</h2>
-              <p className="text-gray-600">{bot.bot.description || 'No description'}</p>
-              <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
-                <span>Your role: <span className="font-medium text-gray-900">{currentUserRole}</span></span>
-                <span>•</span>
-                <span>Provider: {bot.bot.llm_provider}</span>
-                <span>•</span>
-                <span>Collaboration: {bot.bot.allow_collaboration ? 'Enabled' : 'Disabled'}</span>
+          {/* Content */}
+          <div className="mt-6">
+            {activeTab === 'collaborators' && (
+              <CollaborationManagement
+                botId={botId!}
+                botName={bot.bot.name}
+                currentUserRole={currentUserRole}
+                onPermissionUpdate={handlePermissionUpdate}
+              />
+            )}
+
+            {activeTab === 'bulk-update' && canManageCollaborators && (
+              <BulkPermissionManager
+                botId={botId!}
+                collaborators={collaborators}
+                currentUserRole={currentUserRole}
+                onUpdateComplete={handlePermissionUpdate}
+              />
+            )}
+
+            {activeTab === 'activity' && (
+              <div className="space-y-6">
+                <div className="border-b border-neutral-200 dark:border-neutral-800 pb-4">
+                  <h2 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">Activity Log</h2>
+                  <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
+                    View recent activity and permission changes for this bot
+                  </p>
+                </div>
+                
+                <CollaborationManagement
+                  botId={botId!}
+                  botName={bot.bot.name}
+                  currentUserRole={currentUserRole}
+                  onPermissionUpdate={handlePermissionUpdate}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Permission Warning */}
+          {!canManageCollaborators && (
+            <div className="mt-8 bg-warning-100 border border-warning-200 rounded-md p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-warning-600" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-warning-700">
+                    Limited Permissions
+                  </h3>
+                  <div className="mt-2 text-sm text-warning-700">
+                    <p>
+                      You have {currentUserRole} permissions for this bot. 
+                      Only owners and admins can manage collaborators and permissions.
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="text-right">
-              <div className="text-sm text-gray-500">Created</div>
-              <div className="text-sm font-medium text-gray-900">
-                {new Date(bot.bot.created_at).toLocaleDateString()}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Navigation Tabs */}
-      <div className="border-b border-gray-200 mb-8">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setActiveTab('collaborators')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'collaborators'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Collaborators
-          </button>
-          {canManageCollaborators && (
-            <button
-              onClick={() => setActiveTab('bulk-update')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'bulk-update'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              Bulk Update
-            </button>
           )}
-          <button
-            onClick={() => setActiveTab('activity')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              activeTab === 'activity'
-                ? 'border-blue-500 text-blue-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-            }`}
-          >
-            Activity Log
-          </button>
-        </nav>
-      </div>
 
-      {/* Content */}
-      <div className="mt-6">
-        {activeTab === 'collaborators' && (
-          <CollaborationManagement
-            botId={botId!}
-            botName={bot.bot.name}
-            currentUserRole={currentUserRole}
-            onPermissionUpdate={handlePermissionUpdate}
-          />
-        )}
-
-        {activeTab === 'bulk-update' && canManageCollaborators && (
-          <BulkPermissionManager
-            botId={botId!}
-            collaborators={collaborators}
-            currentUserRole={currentUserRole}
-            onUpdateComplete={handlePermissionUpdate}
-          />
-        )}
-
-        {activeTab === 'activity' && (
-          <div className="space-y-6">
-            <div className="border-b border-gray-200 pb-4">
-              <h2 className="text-2xl font-bold text-gray-900">Activity Log</h2>
-              <p className="mt-1 text-sm text-gray-600">
-                View recent activity and permission changes for this bot
-              </p>
-            </div>
-            
-            <CollaborationManagement
-              botId={botId!}
-              botName={bot.bot.name}
-              currentUserRole={currentUserRole}
-              onPermissionUpdate={handlePermissionUpdate}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Permission Warning */}
-      {!canManageCollaborators && (
-        <div className="mt-8 bg-yellow-50 border border-yellow-200 rounded-md p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-yellow-800">
-                Limited Permissions
-              </h3>
-              <div className="mt-2 text-sm text-yellow-700">
-                <p>
-                  You have {currentUserRole} permissions for this bot. 
-                  Only owners and admins can manage collaborators and permissions.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Debug component - remove in production */}
-      <AuthDebug />
-    </div>
+          {/* Debug component - remove in production */}
+          <AuthDebug />
+        </Container>
+      </MainLayout>
+    </ProtectedRoute>
   );
-}; 
+};
+
+export default CollaborationPage;

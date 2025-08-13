@@ -4,7 +4,7 @@
 import React from 'react';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger';
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
   size?: 'sm' | 'md' | 'lg';
   isLoading?: boolean;
   children: React.ReactNode;
@@ -19,13 +19,15 @@ export const Button: React.FC<ButtonProps> = ({
   className = '',
   ...props
 }) => {
-  const baseClasses = 'inline-flex items-center justify-center font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors duration-200';
+  const baseClasses = 'inline-flex items-center justify-center font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-all duration-150';
   
   const variantClasses = {
-    primary: 'bg-blue-600 hover:bg-blue-700 text-white focus:ring-blue-500',
-    secondary: 'bg-gray-200 hover:bg-gray-300 text-gray-900 focus:ring-gray-500',
-    danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500',
-  };
+    primary: 'bg-primary-600 hover:bg-primary-700 text-white focus:ring-primary-500 dark:focus:ring-primary-400',
+    secondary: 'bg-neutral-200 hover:bg-neutral-300 text-neutral-900 focus:ring-neutral-500 dark:bg-neutral-700 dark:hover:bg-neutral-600 dark:text-neutral-100 dark:focus:ring-neutral-400',
+    outline: 'bg-transparent text-neutral-700 dark:text-neutral-200 border border-neutral-300 dark:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-800 focus:ring-primary-500 dark:focus:ring-primary-400',
+    ghost: 'bg-transparent text-neutral-700 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus:ring-primary-500 dark:focus:ring-primary-400',
+    danger: 'bg-danger-600 hover:bg-danger-700 text-white focus:ring-danger-500 dark:focus:ring-danger-400',
+  } as const;
 
   const sizeClasses = {
     sm: 'px-3 py-2 text-sm',

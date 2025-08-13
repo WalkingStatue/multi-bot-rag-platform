@@ -6,6 +6,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Button } from './Button';
 import { NotificationSystem } from './NotificationSystem';
+import { useTheme } from '../../hooks/useTheme';
 
 interface NavigationProps {
   className?: string;
@@ -16,13 +17,40 @@ export const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
   const location = useLocation();
   // const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { isDark, toggleTheme } = useTheme();
 
   const handleLogout = () => {
     logout();
   };
 
-  const isActive = (path: string) => {
-    return location.pathname === path || location.pathname.startsWith(path + '/');
+  const isActive = (href: string) => {
+    const currentPath = location.pathname;
+    const currentSearch = new URLSearchParams(location.search);
+    try {
+      const url = new URL(href, window.location.origin);
+      const itemPath = url.pathname;
+      const itemSearch = new URLSearchParams(url.search);
+
+      // Path must match for active
+      if (itemPath !== currentPath) return false;
+
+      // If item has search params, all must match
+      let hasParams = false;
+      for (const [key, value] of itemSearch.entries()) {
+        hasParams = true;
+        if (currentSearch.get(key) !== value) return false;
+      }
+
+      // If item has no params and we're on /dashboard with a view param, do not mark as Dashboard
+      if (!hasParams && currentPath === '/dashboard' && currentSearch.get('view')) {
+        return false;
+      }
+
+      return true;
+    } catch {
+      // Fallback: simple equality
+      return currentPath === href || currentPath.startsWith(href + '/');
+    }
   };
 
   const navigationItems = [
@@ -54,19 +82,11 @@ export const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
         </svg>
       ),
     },
-    {
-      name: 'Profile',
-      href: '/profile',
-      icon: (
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-        </svg>
-      ),
-    },
+    // Profile removed from main nav; accessible via avatar
   ];
 
   return (
-    <nav className={`bg-white shadow ${className}`}>
+    <nav className={`bg-white/80 dark:bg-neutral-900/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 shadow transition-colors duration-200 ${className}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           {/* Logo and Brand */}
@@ -78,7 +98,7 @@ export const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
                 </svg>
               </div>
               <div className="ml-3">
-                <h1 className="text-xl font-semibold text-gray-900">
+                <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
                   Multi-Bot RAG Platform
                 </h1>
               </div>
@@ -93,10 +113,10 @@ export const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
                 <Link
                   key={item.name}
                   to={item.href}
-                  className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                   className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     isActive(item.href)
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                      ? 'text-primary-700 dark:text-primary-300 bg-primary-50 dark:bg-primary-950/40'
+                      : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 dark:text-neutral-300 dark:hover:text-neutral-100 dark:hover:bg-neutral-800/50'
                   }`}
                 >
                   <span className="mr-2">{item.icon}</span>
@@ -106,7 +126,7 @@ export const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
             </div>
 
             {/* Divider */}
-            <div className="h-6 w-px bg-gray-200"></div>
+            <div className="h-6 w-px bg-neutral-200 dark:bg-neutral-700"></div>
 
             {/* User Menu and Notifications */}
             <div className="flex items-center space-x-4">
@@ -116,22 +136,44 @@ export const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
               {/* User Info */}
               <div className="flex items-center space-x-3">
                 <div className="text-right">
-                  <div className="text-sm font-medium text-gray-900">
+                  <div className="text-sm font-medium text-neutral-900 dark:text-neutral-100">
                     {user?.full_name || user?.username}
                   </div>
-                  <div className="text-xs text-gray-500">
+                  <div className="text-xs text-neutral-500 dark:text-neutral-400">
                     {user?.email}
                   </div>
                 </div>
                 
                 {/* User Avatar */}
-                <div className="flex-shrink-0">
-                  <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center">
-                    <span className="text-sm font-medium text-white">
-                      {(user?.full_name || user?.username || 'U').charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                </div>
+                <Link to="/profile" className="flex-shrink-0">
+                  {user?.avatar_url ? (
+                    // eslint-disable-next-line jsx-a11y/alt-text
+                    <img
+                      src={user.avatar_url}
+                      className="h-8 w-8 rounded-full object-cover ring-2 ring-transparent hover:ring-primary-500"
+                    />
+                  ) : (
+                    <div className="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center hover:ring-2 hover:ring-primary-500">
+                      <span className="text-sm font-medium text-white">
+                        {(user?.full_name || user?.username || 'U').charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                </Link>
+
+                {/* Theme toggle */}
+                <button
+                  onClick={toggleTheme}
+                  className="rounded-md p-2 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:text-neutral-300 dark:hover:text-neutral-100 dark:hover:bg-neutral-800"
+                  aria-label="Toggle theme"
+                  title="Toggle theme"
+                >
+                  {isDark ? (
+                    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707 8.001 8.001 0 1017.293 13.293z"/></svg>
+                  ) : (
+                    <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-4 7a1 1 0 011-1h0a1 1 0 110 2h0a1 1 0 01-1-1zM4.222 4.222a1 1 0 011.415 0l.707.707a1 1 0 01-1.414 1.415l-.708-.708a1 1 0 010-1.414zM16.97 16.97a1 1 0 01-1.415 0l-.707-.707a1 1 0 011.414-1.415l.708.708a1 1 0 010 1.414zM2 11a1 1 0 100-2h-1a1 1 0 100 2h1zm18 0a1 1 0 100-2h-1a1 1 0 100 2h1zM4.222 15.778a1 1 0 010-1.415l.708-.707a1 1 0 111.414 1.414l-.707.708a1 1 0 01-1.415 0zM15.778 4.222a1 1 0 00-1.415 0l-.707.708a1 1 0 101.414 1.414l.708-.707a1 1 0 000-1.415z" clipRule="evenodd"/></svg>
+                  )}
+                </button>
 
                 {/* Logout Button */}
                 <Button
@@ -152,7 +194,7 @@ export const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
             
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+              className="inline-flex items-center justify-center p-2 rounded-md text-neutral-400 hover:text-neutral-500 hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500 dark:text-neutral-300 dark:hover:text-neutral-100 dark:hover:bg-neutral-800"
             >
               <span className="sr-only">Open main menu</span>
               {isMobileMenuOpen ? (
@@ -172,15 +214,15 @@ export const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
       {/* Mobile menu */}
       {isMobileMenuOpen && (
         <div className="md:hidden">
-          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white border-t border-gray-200">
+          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-white dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-800">
             {navigationItems.map((item) => (
               <Link
                 key={item.name}
                 to={item.href}
                 className={`flex items-center px-3 py-2 rounded-md text-base font-medium transition-colors ${
                   isActive(item.href)
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+                    : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 dark:text-neutral-300 dark:hover:text-neutral-100 dark:hover:bg-neutral-800/50'
                 }`}
                 onClick={() => setIsMobileMenuOpen(false)}
               >
@@ -190,20 +232,20 @@ export const Navigation: React.FC<NavigationProps> = ({ className = '' }) => {
             ))}
             
             {/* Mobile user info */}
-            <div className="px-3 py-3 border-t border-gray-200">
+            <div className="px-3 py-3 border-t border-neutral-200 dark:border-neutral-800">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
-                  <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center">
+                  <div className="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center">
                     <span className="text-sm font-medium text-white">
                       {(user?.full_name || user?.username || 'U').charAt(0).toUpperCase()}
                     </span>
                   </div>
                 </div>
                 <div className="ml-3">
-                  <div className="text-base font-medium text-gray-800">
+                  <div className="text-base font-medium text-neutral-800 dark:text-neutral-100">
                     {user?.full_name || user?.username}
                   </div>
-                  <div className="text-sm text-gray-500">
+                  <div className="text-sm text-neutral-500 dark:text-neutral-400">
                     {user?.email}
                   </div>
                 </div>

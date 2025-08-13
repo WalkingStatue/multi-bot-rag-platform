@@ -3,7 +3,8 @@ User management API endpoints.
 """
 import logging
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+import base64
 from sqlalchemy.orm import Session
 
 from ..core.database import get_db
@@ -58,6 +59,41 @@ async def update_profile(
     """
     updated_user = user_service.update_user_profile(current_user, updates)
     return UserResponse.model_validate(updated_user)
+
+
+@router.post("/avatar", response_model=UserResponse)
+async def upload_avatar(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
+    user_service: UserService = Depends(get_user_service)
+):
+    """
+    Upload and save a user's avatar image.
+
+    The image is stored in the database as a data URL (base64-encoded).
+    This avoids managing a separate static file store and works well for small avatars.
+    """
+    # Validate content type
+    allowed_types = {"image/png", "image/jpeg", "image/jpg", "image/webp"}
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported image type. Allowed: png, jpg, jpeg, webp",
+        )
+
+    # Read and size-check (max ~2MB)
+    content = await file.read()
+    max_bytes = 2 * 1024 * 1024
+    if len(content) > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Avatar image too large (max 2MB)",
+        )
+
+    # Encode as data URL and update profile
+    data_url = f"data:{file.content_type};base64,{base64.b64encode(content).decode()}"
+    updated = user_service.update_user_profile(current_user, UserUpdate(avatar_url=data_url))
+    return UserResponse.model_validate(updated)
 
 
 @router.post("/change-password", status_code=status.HTTP_200_OK)

@@ -20,18 +20,18 @@ export const Alert: React.FC<AlertProps> = ({
   className = '',
 }) => {
   const typeClasses = {
-    success: 'bg-green-50 border-green-200 text-green-800',
-    error: 'bg-red-50 border-red-200 text-red-800',
-    warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
-    info: 'bg-blue-50 border-blue-200 text-blue-800',
-  };
+    success: 'bg-success-100 border-success-200 text-success-700 dark:bg-success-900/20 dark:border-success-800 dark:text-success-300',
+    error: 'bg-danger-100 border-danger-200 text-danger-700 dark:bg-danger-900/20 dark:border-danger-800 dark:text-danger-300',
+    warning: 'bg-warning-100 border-warning-200 text-warning-700 dark:bg-warning-900/20 dark:border-warning-800 dark:text-warning-300',
+    info: 'bg-primary-100 border-primary-200 text-primary-700 dark:bg-primary-900/20 dark:border-primary-800 dark:text-primary-300',
+  } as const;
 
   const iconClasses = {
-    success: 'text-green-400',
-    error: 'text-red-400',
-    warning: 'text-yellow-400',
-    info: 'text-blue-400',
-  };
+    success: 'text-success-600 dark:text-success-400',
+    error: 'text-danger-600 dark:text-danger-400',
+    warning: 'text-warning-600 dark:text-warning-400',
+    info: 'text-primary-600 dark:text-primary-400',
+  } as const;
 
   const classes = [
     'border rounded-md p-4',

@@ -114,7 +114,7 @@ export class WebSocketService {
       }
     };
 
-    this.socket.onerror = (error) => {
+    this.socket.onerror = () => {
       this.notifyListeners('connection', { status: 'error', error: 'Connection error' });
     };
 

@@ -53,11 +53,11 @@ export const ForgotPasswordForm: React.FC = () => {
   if (isSubmitted) {
     return (
       <div className="max-w-md mx-auto">
-        <div className="bg-white py-8 px-6 shadow rounded-lg sm:px-10">
+        <div className="bg-white dark:bg-neutral-900 py-8 px-6 shadow rounded-lg sm:px-10">
           <div className="text-center">
-            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+            <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-success-100">
               <svg
-                className="h-6 w-6 text-green-600"
+                className="h-6 w-6 text-success-600"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -70,18 +70,18 @@ export const ForgotPasswordForm: React.FC = () => {
                 />
               </svg>
             </div>
-            <h2 className="mt-4 text-2xl font-extrabold text-gray-900">
+            <h2 className="mt-4 text-2xl font-extrabold text-neutral-900 dark:text-neutral-100">
               Check your email
             </h2>
-            <p className="mt-2 text-sm text-gray-600">
+            <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
               We've sent a password reset link to <strong>{email}</strong>
             </p>
-            <p className="mt-4 text-sm text-gray-500">
+            <p className="mt-4 text-sm text-neutral-500 dark:text-neutral-400">
               Didn't receive the email? Check your spam folder or{' '}
               <button
                 type="button"
                 onClick={() => setIsSubmitted(false)}
-                className="font-medium text-blue-600 hover:text-blue-500"
+                className="font-medium text-primary-600 hover:text-primary-500"
               >
                 try again
               </button>
@@ -89,7 +89,7 @@ export const ForgotPasswordForm: React.FC = () => {
             <div className="mt-6">
               <Link
                 to="/login"
-                className="font-medium text-blue-600 hover:text-blue-500"
+                className="font-medium text-primary-600 hover:text-primary-500"
               >
                 Back to sign in
               </Link>
@@ -102,12 +102,12 @@ export const ForgotPasswordForm: React.FC = () => {
 
   return (
     <div className="max-w-md mx-auto">
-      <div className="bg-white py-8 px-6 shadow rounded-lg sm:px-10">
+      <div className="bg-white dark:bg-neutral-900 py-8 px-6 shadow rounded-lg sm:px-10">
         <div className="mb-6">
-          <h2 className="text-center text-3xl font-extrabold text-gray-900">
+          <h2 className="text-center text-3xl font-extrabold text-neutral-900 dark:text-neutral-100">
             Forgot your password?
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="mt-2 text-center text-sm text-neutral-600 dark:text-neutral-400">
             Enter your email address and we'll send you a link to reset your password.
           </p>
         </div>
@@ -146,7 +146,7 @@ export const ForgotPasswordForm: React.FC = () => {
           <div className="text-center">
             <Link
               to="/login"
-              className="font-medium text-blue-600 hover:text-blue-500"
+              className="font-medium text-primary-600 hover:text-primary-500"
             >
               Back to sign in
             </Link>

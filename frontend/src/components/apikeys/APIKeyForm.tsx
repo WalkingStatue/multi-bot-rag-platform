@@ -130,15 +130,15 @@ export const APIKeyForm: React.FC<APIKeyFormProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+    <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-md p-6">
+      <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100 mb-4">
         {initialProvider ? 'Update API Key' : 'Add API Key'}
       </h3>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Provider Selection */}
         <div>
-          <label htmlFor="provider" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="provider" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
             Provider
           </label>
           <select
@@ -146,7 +146,7 @@ export const APIKeyForm: React.FC<APIKeyFormProps> = ({
             value={formData.provider}
             onChange={(e) => handleProviderChange(e.target.value)}
             disabled={!!initialProvider}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100"
+            className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-neutral-100 dark:disabled:bg-neutral-800"
             required
           >
             <option value="">Select a provider</option>
@@ -160,7 +160,7 @@ export const APIKeyForm: React.FC<APIKeyFormProps> = ({
 
         {/* API Key Input */}
         <div>
-          <label htmlFor="api_key" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="api_key" className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
             API Key
           </label>
           <div className="relative">
@@ -170,7 +170,7 @@ export const APIKeyForm: React.FC<APIKeyFormProps> = ({
               value={formData.api_key}
               onChange={(e) => handleAPIKeyChange(e.target.value)}
               placeholder={getAPIKeyPlaceholder(formData.provider)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-3 py-2 border border-neutral-300 dark:border-neutral-700 dark:bg-neutral-900 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               required
             />
             {formData.provider && formData.api_key && (
@@ -178,7 +178,7 @@ export const APIKeyForm: React.FC<APIKeyFormProps> = ({
                 type="button"
                 onClick={validateAPIKey}
                 disabled={validationStatus.isValidating}
-                className="absolute right-2 top-1/2 transform -translate-y-1/2 px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+                className="absolute right-2 top-1/2 transform -translate-y-1/2 px-3 py-1 text-xs bg-primary-600 text-white rounded hover:bg-primary-700 disabled:opacity-50"
               >
                 {validationStatus.isValidating ? 'Validating...' : 'Validate'}
               </button>
@@ -190,10 +190,10 @@ export const APIKeyForm: React.FC<APIKeyFormProps> = ({
             <div
               className={`mt-2 text-sm ${
                 validationStatus.isValid
-                  ? 'text-green-600'
+                  ? 'text-success-600'
                   : validationStatus.isValid === false
-                  ? 'text-red-600'
-                  : 'text-gray-600'
+                  ? 'text-danger-600'
+                  : 'text-neutral-600 dark:text-neutral-400'
               }`}
             >
               {validationStatus.message}
@@ -204,15 +204,15 @@ export const APIKeyForm: React.FC<APIKeyFormProps> = ({
         {/* Available Models */}
         {formData.provider && providers[formData.provider] && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">
               Available Models
             </label>
-            <div className="bg-gray-50 rounded-md p-3">
+            <div className="bg-neutral-50 dark:bg-neutral-800 rounded-md p-3">
               <div className="flex flex-wrap gap-2">
                 {providers[formData.provider].models.map((model) => (
                   <span
                     key={model}
-                    className="inline-block px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded"
+                    className="inline-block px-2 py-1 text-xs bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 rounded"
                   >
                     {model}
                   </span>
@@ -227,14 +227,14 @@ export const APIKeyForm: React.FC<APIKeyFormProps> = ({
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="px-4 py-2 text-sm font-medium text-neutral-700 bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded-md hover:bg-neutral-50 dark:hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={isLoading || !formData.provider || !formData.api_key.trim()}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? 'Saving...' : initialProvider ? 'Update' : 'Add'} API Key
           </button>

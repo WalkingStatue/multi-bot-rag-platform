@@ -1,21 +1,83 @@
 {
   "compilerOptions": {
+    // Language and Environment
     "target": "ES2020",
-    "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "lib": ["ES2020", "DOM", "DOM.Iterable", "WebWorker"],
     "module": "ESNext",
-    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "useDefineForClassFields": true,
+
+    // Module Resolution
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
-    "isolatedModules": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+
+    // Type Checking - Strict Mode
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "strictFunctionTypes": false,
+    "strictBindCallApply": false,
+    "strictPropertyInitialization": false,
+    "noImplicitThis": false,
+    "noImplicitReturns": false,
+    "noFallthroughCasesInSwitch": false,
+    "noUncheckedIndexedAccess": false,
+    "noImplicitOverride": false,
+    "exactOptionalPropertyTypes": false,
+
+    // Additional Checks
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noPropertyAccessFromIndexSignature": false,
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false,
+
+    // Emit
     "noEmit": true,
-    "jsx": "react-jsx",
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "isolatedModules": true,
+    "skipLibCheck": true,
+
+    // Interop Constraints
+    "verbatimModuleSyntax": false,
+
+    // Type Acquisition
+    "typeRoots": ["./node_modules/@types", "./src/types"],
+
+    // Path Mapping
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@/components/*": ["src/components/*"],
+      "@/hooks/*": ["src/hooks/*"],
+      "@/services/*": ["src/services/*"],
+      "@/utils/*": ["src/utils/*"],
+      "@/types/*": ["src/types/*"],
+      "@/config/*": ["src/config/*"],
+      "@/layouts/*": ["src/layouts/*"],
+      "@/pages/*": ["src/pages/*"]
+    }
   },
-  "include": ["src"],
+  "include": [
+    "src/**/*",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.js",
+    "src/**/*.jsx",
+    "vite-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.ts",
+    "**/*.spec.tsx"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

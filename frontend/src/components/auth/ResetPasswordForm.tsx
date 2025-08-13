@@ -82,7 +82,7 @@ export const ResetPasswordForm: React.FC = () => {
   if (isSubmitted) {
     return (
       <div className="max-w-md mx-auto">
-        <div className="bg-white py-8 px-6 shadow rounded-lg sm:px-10">
+        <div className="bg-white dark:bg-neutral-900 py-8 px-6 shadow rounded-lg sm:px-10">
           <div className="text-center">
             <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
               <svg
@@ -99,16 +99,16 @@ export const ResetPasswordForm: React.FC = () => {
                 />
               </svg>
             </div>
-            <h2 className="mt-4 text-2xl font-extrabold text-gray-900">
+            <h2 className="mt-4 text-2xl font-extrabold text-neutral-900 dark:text-neutral-100">
               Password reset successful
             </h2>
-            <p className="mt-2 text-sm text-gray-600">
+            <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
               Your password has been successfully reset. You can now sign in with your new password.
             </p>
             <div className="mt-6">
               <Link
                 to="/login"
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
               >
                 Sign in
               </Link>
@@ -125,12 +125,12 @@ export const ResetPasswordForm: React.FC = () => {
 
   return (
     <div className="max-w-md mx-auto">
-      <div className="bg-white py-8 px-6 shadow rounded-lg sm:px-10">
+      <div className="bg-white dark:bg-neutral-900 py-8 px-6 shadow rounded-lg sm:px-10">
         <div className="mb-6">
-          <h2 className="text-center text-3xl font-extrabold text-gray-900">
+          <h2 className="text-center text-3xl font-extrabold text-neutral-900 dark:text-neutral-100">
             Reset your password
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="mt-2 text-center text-sm text-neutral-600 dark:text-neutral-400">
             Enter your new password below.
           </p>
         </div>
@@ -182,7 +182,7 @@ export const ResetPasswordForm: React.FC = () => {
           <div className="text-center">
             <Link
               to="/login"
-              className="font-medium text-blue-600 hover:text-blue-500"
+              className="font-medium text-primary-600 hover:text-primary-500"
             >
               Back to sign in
             </Link>

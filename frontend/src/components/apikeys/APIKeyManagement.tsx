@@ -169,8 +169,8 @@ export const APIKeyManagement: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">API Key Management</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">API Key Management</h1>
+          <p className="text-neutral-600 dark:text-neutral-400 mt-1">
             Manage your API keys for different LLM providers
           </p>
         </div>
@@ -179,7 +179,7 @@ export const APIKeyManagement: React.FC = () => {
           <button
             onClick={() => setViewMode('add')}
             disabled={Object.keys(getAvailableProviders()).length === 0}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Add API Key
           </button>
@@ -188,22 +188,22 @@ export const APIKeyManagement: React.FC = () => {
 
       {/* Messages */}
       {error && (
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+        <div className="bg-danger-100 border border-danger-200 rounded-md p-4">
           <div className="flex">
             <div className="text-red-400">⚠️</div>
             <div className="ml-3">
-              <p className="text-sm text-red-800">{error}</p>
+              <p className="text-sm text-danger-700">{error}</p>
             </div>
           </div>
         </div>
       )}
 
       {success && (
-        <div className="bg-green-50 border border-green-200 rounded-md p-4">
+        <div className="bg-success-100 border border-success-200 rounded-md p-4">
           <div className="flex">
             <div className="text-green-400">✅</div>
             <div className="ml-3">
-              <p className="text-sm text-green-800">{success}</p>
+              <p className="text-sm text-success-700">{success}</p>
             </div>
           </div>
         </div>
@@ -242,9 +242,9 @@ export const APIKeyManagement: React.FC = () => {
       {/* Loading overlay */}
       {loading.action && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 flex items-center space-x-3">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-            <span className="text-gray-900">Processing...</span>
+          <div className="bg-white dark:bg-neutral-900 rounded-lg p-6 flex items-center space-x-3">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+            <span className="text-neutral-900 dark:text-neutral-100">Processing...</span>
           </div>
         </div>
       )}

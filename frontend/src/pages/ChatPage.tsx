@@ -7,6 +7,8 @@ import { ChatWindow } from '../components/chat/ChatWindow';
 import { ChatSearch } from '../components/chat/ChatSearch';
 import { useChatStore } from '../stores/chatStore';
 import { botService } from '../services/botService';
+import { Button } from '../components/common';
+import { ChatLayout } from '../layouts';
 import { BotResponse } from '../types/bot';
 import { ConversationSearchResult } from '../types/chat';
 
@@ -88,67 +90,64 @@ export const ChatPage: React.FC = () => {
     );
   }
 
-  return (
-    <div className="h-screen flex flex-col bg-gray-50 chat-page">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="text-gray-500 hover:text-gray-700"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-              </svg>
-            </button>
-            <div>
-              <h1 className="text-xl font-semibold text-gray-900">{bot.name}</h1>
-              <p className="text-sm text-gray-500">{bot.description}</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            {/* Quick Actions */}
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={() => navigate(`/bots/${bot.id}/documents`)}
-                className="inline-flex items-center px-3 py-2 border border-purple-300 shadow-sm text-sm leading-4 font-medium rounded-md text-purple-700 bg-white hover:bg-purple-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
-              >
-                <svg className="-ml-0.5 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Documents
-              </button>
-              
-              {bot.allow_collaboration && (
-                <button
-                  onClick={() => navigate(`/bots/${bot.id}/collaboration`)}
-                  className="inline-flex items-center px-3 py-2 border border-blue-300 shadow-sm text-sm leading-4 font-medium rounded-md text-blue-700 bg-white hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <svg className="-ml-0.5 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                  </svg>
-                  Collaboration
-                </button>
-              )}
-            </div>
-            
-            {/* Search */}
-            <div className="w-96">
-              <ChatSearch 
-                botId={bot.id} 
-                onResultSelect={handleSearchResultSelect}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Chat interface */}
-      <div className="flex-1 p-6 min-h-0">
-        <ChatWindow bot={bot} className="h-full" />
-      </div>
+  // Quick Actions for the right side of the header
+  const quickActions = (
+    <div className="flex items-center space-x-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => navigate(`/bots/${bot.id}/documents`)}
+        className="border-accent-300 text-accent-700 hover:bg-accent-50 dark:bg-neutral-900 dark:border-accent-800 dark:text-accent-300"
+      >
+        <svg className="-ml-0.5 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        Documents
+      </Button>
+      
+      {bot.allow_collaboration && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate(`/bots/${bot.id}/collaboration`)}
+          className="border-primary-300 text-primary-700 hover:bg-primary-50 dark:bg-neutral-900 dark:border-primary-800 dark:text-primary-300"
+        >
+          <svg className="-ml-0.5 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+          </svg>
+          Collaboration
+        </Button>
+      )}
     </div>
   );
+
+  // Search component for the right side of the header
+  const searchComponent = (
+    <div className="w-96">
+      <ChatSearch 
+        botId={bot.id} 
+        onResultSelect={handleSearchResultSelect}
+      />
+    </div>
+  );
+
+  // Combine quick actions and search
+  const rightContent = (
+    <div className="flex items-center space-x-4">
+      {quickActions}
+      {searchComponent}
+    </div>
+  );
+
+  return (
+    <ChatLayout
+      title={bot.name}
+      subtitle={bot.description || "Chat with your AI assistant"}
+      rightContent={rightContent}
+    >
+      <ChatWindow bot={bot} className="h-full" />
+    </ChatLayout>
+  );
 };
+
+export default ChatPage;

@@ -34,8 +34,8 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="max-w-md w-full bg-white shadow-lg rounded-lg p-6">
+        <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-[var(--bg)]">
+          <div className="max-w-md w-full bg-white dark:bg-neutral-900 shadow-lg rounded-lg p-6">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <svg
@@ -53,19 +53,19 @@ export class ErrorBoundary extends Component<Props, State> {
                 </svg>
               </div>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-gray-800">
+                <h3 className="text-sm font-medium text-neutral-800 dark:text-neutral-100">
                   Something went wrong
                 </h3>
-                <div className="mt-2 text-sm text-gray-500">
+                <div className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
                   <p>
                     An unexpected error occurred. Please refresh the page and try again.
                   </p>
                   {this.state.error && (
                     <details className="mt-2">
-                      <summary className="cursor-pointer text-xs text-gray-400">
+                       <summary className="cursor-pointer text-xs text-neutral-400">
                         Error details
                       </summary>
-                      <pre className="mt-1 text-xs text-gray-400 whitespace-pre-wrap">
+                       <pre className="mt-1 text-xs text-neutral-400 whitespace-pre-wrap">
                         {this.state.error.message}
                       </pre>
                     </details>
@@ -76,7 +76,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="mt-4">
               <button
                 onClick={() => window.location.reload()}
-                className="w-full bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                className="w-full bg-primary-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
               >
                 Refresh Page
               </button>
@@ -95,10 +95,10 @@ export const ChatErrorFallback: React.FC<{ error?: string; onRetry?: () => void 
   error,
   onRetry
 }) => (
-  <div className="flex items-center justify-center h-64 bg-gray-50 rounded-lg">
+  <div className="flex items-center justify-center h-64 bg-neutral-50 dark:bg-neutral-900 rounded-lg">
     <div className="text-center">
       <svg
-        className="mx-auto h-12 w-12 text-gray-400"
+        className="mx-auto h-12 w-12 text-neutral-400"
         fill="none"
         viewBox="0 0 24 24"
         stroke="currentColor"
@@ -110,15 +110,15 @@ export const ChatErrorFallback: React.FC<{ error?: string; onRetry?: () => void 
           d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
         />
       </svg>
-      <h3 className="mt-2 text-sm font-medium text-gray-900">Chat Error</h3>
-      <p className="mt-1 text-sm text-gray-500">
+      <h3 className="mt-2 text-sm font-medium text-neutral-900 dark:text-neutral-100">Chat Error</h3>
+      <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
         {error || 'Unable to load chat. Please try again.'}
       </p>
       {onRetry && (
         <div className="mt-4">
           <button
             onClick={onRetry}
-            className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
           >
             Try Again
           </button>

@@ -4,11 +4,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { Navigation } from '../components/common/Navigation';
 import { ProtectedRoute } from '../components/auth/ProtectedRoute';
 import { BotManagement } from '../components/bots/BotManagement';
 import { APIKeyManagement } from '../components/apikeys/APIKeyManagement';
 import { botService } from '../services/botService';
+import { Button, Card, Grid, Panel, Container } from '../components/common';
+import { DashboardLayout } from '../layouts';
 import { BotWithRole } from '../types/bot';
 
 export const DashboardPage: React.FC = () => {
@@ -26,6 +27,39 @@ export const DashboardPage: React.FC = () => {
 
   // Get current view from URL parameters
   const currentView = searchParams.get('view') || 'dashboard';
+  
+  // Get page title and subtitle based on current view
+  const getPageHeader = () => {
+    switch (currentView) {
+      case 'bots':
+        return {
+          title: 'Bot Management',
+          subtitle: 'Create, edit and manage your bots',
+        };
+      case 'api-keys':
+        return {
+          title: 'API Key Management',
+          subtitle: 'Manage your API keys for different LLM providers',
+        };
+      default:
+        return {
+          title: 'Dashboard',
+          subtitle: 'Welcome to your Multi-Bot RAG Platform dashboard!',
+        };
+    }
+  };
+
+  // Dashboard actions
+  const dashboardActions = (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={() => loadDashboardData()}
+      isLoading={isLoading}
+    >
+      Refresh
+    </Button>
+  );
 
   useEffect(() => {
     if (currentView === 'dashboard') {
@@ -77,10 +111,6 @@ export const DashboardPage: React.FC = () => {
     navigate('/profile');
   };
 
-  const handleBackToDashboard = () => {
-    navigate('/dashboard');
-  };
-
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'owner': return 'bg-green-100 text-green-800';
@@ -113,302 +143,304 @@ export const DashboardPage: React.FC = () => {
   };
 
   const renderDashboardContent = () => (
-    <>
-      {/* Dashboard Header */}
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">
-          Dashboard
-        </h2>
-        <p className="text-gray-600">
-          Welcome to your Multi-Bot RAG Platform dashboard!
-        </p>
-      </div>
-
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    Total Bots
-                  </dt>
-                  <dd className="text-lg font-medium text-gray-900">
-                    {isLoading ? '...' : stats.totalBots}
-                  </dd>
-                </dl>
+    <Container>
+      {/* Stats Cards */}
+      <Grid cols={1} mdCols={2} lgCols={4} gap="medium" className="mb-8">
+        <Card
+          title="Total Bots"
+          variant="default"
+          padding="medium"
+        >
+          <div className="flex items-center">
+            <div className="flex-shrink-0 p-3 rounded-full bg-primary-100 dark:bg-primary-900/30">
+              <svg className="h-6 w-6 text-primary-600 dark:text-primary-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            </div>
+            <div className="ml-5">
+              <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
+                {isLoading ? '...' : stats.totalBots}
               </div>
             </div>
           </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                </svg>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    Owned Bots
-                  </dt>
-                  <dd className="text-lg font-medium text-gray-900">
-                    {isLoading ? '...' : stats.ownedBots}
-                  </dd>
-                </dl>
+        </Card>
+        
+        <Card
+          title="Owned Bots"
+          variant="default"
+          padding="medium"
+        >
+          <div className="flex items-center">
+            <div className="flex-shrink-0 p-3 rounded-full bg-success-100 dark:bg-success-900/30">
+              <svg className="h-6 w-6 text-success-600 dark:text-success-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+              </svg>
+            </div>
+            <div className="ml-5">
+              <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
+                {isLoading ? '...' : stats.ownedBots}
               </div>
             </div>
           </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    Shared Bots
-                  </dt>
-                  <dd className="text-lg font-medium text-gray-900">
-                    {isLoading ? '...' : stats.sharedBots}
-                  </dd>
-                </dl>
+        </Card>
+        
+        <Card
+          title="Shared Bots"
+          variant="default"
+          padding="medium"
+        >
+          <div className="flex items-center">
+            <div className="flex-shrink-0 p-3 rounded-full bg-accent-100 dark:bg-accent-900/30">
+              <svg className="h-6 w-6 text-accent-600 dark:text-accent-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+            </div>
+            <div className="ml-5">
+              <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
+                {isLoading ? '...' : stats.sharedBots}
               </div>
             </div>
           </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    Recent Activity
-                  </dt>
-                  <dd className="text-lg font-medium text-gray-900">
-                    {isLoading ? '...' : stats.recentActivity}
-                  </dd>
-                </dl>
+        </Card>
+        
+        <Card
+          title="Recent Activity"
+          variant="default"
+          padding="medium"
+        >
+          <div className="flex items-center">
+            <div className="flex-shrink-0 p-3 rounded-full bg-warning-100 dark:bg-warning-900/30">
+              <svg className="h-6 w-6 text-warning-600 dark:text-warning-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <div className="ml-5">
+              <div className="text-3xl font-semibold text-neutral-900 dark:text-neutral-100">
+                {isLoading ? '...' : stats.recentActivity}
               </div>
             </div>
           </div>
-        </div>
-      </div>
-
+        </Card>
+      </Grid>
+      
       {/* Quick Actions */}
-      <div className="bg-white shadow rounded-lg mb-8">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">Quick Actions</h3>
-        </div>
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <button
-              onClick={handleCreateBot}
-              className="flex items-center p-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
+      <Panel
+        title="Quick Actions"
+        variant="default"
+        padding="medium"
+        className="mb-8"
+      >
+        <Grid cols={1} mdCols={2} lgCols={4} gap="medium">
+          <Card
+            variant="outline"
+            padding="medium"
+            hover={true}
+            onClick={handleCreateBot}
+          >
+            <div className="flex items-center">
               <div className="flex-shrink-0">
-                <svg className="h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-8 w-8 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                 </svg>
               </div>
               <div className="ml-4">
-                <h4 className="text-sm font-medium text-gray-900">Create New Bot</h4>
-                <p className="text-sm text-gray-500">Build a new AI assistant</p>
+                <h4 className="text-sm font-medium text-neutral-900 dark:text-neutral-100">Create New Bot</h4>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">Build a new AI assistant</p>
               </div>
-            </button>
-
-            <button
-              onClick={handleManageBots}
-              className="flex items-center p-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
+            </div>
+          </Card>
+          
+          <Card
+            variant="outline"
+            padding="medium"
+            hover={true}
+            onClick={handleManageBots}
+          >
+            <div className="flex items-center">
               <div className="flex-shrink-0">
-                <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-8 w-8 text-success-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
               </div>
               <div className="ml-4">
-                <h4 className="text-sm font-medium text-gray-900">Manage Bots</h4>
-                <p className="text-sm text-gray-500">View and edit your bots</p>
+                <h4 className="text-sm font-medium text-neutral-900 dark:text-neutral-100">Manage Bots</h4>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">View and edit your bots</p>
               </div>
-            </button>
-
-            <button
-              onClick={handleManageAPIKeys}
-              className="flex items-center p-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
+            </div>
+          </Card>
+          
+          <Card
+            variant="outline"
+            padding="medium"
+            hover={true}
+            onClick={handleManageAPIKeys}
+          >
+            <div className="flex items-center">
               <div className="flex-shrink-0">
-                <svg className="h-8 w-8 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-8 w-8 text-accent-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
                 </svg>
               </div>
               <div className="ml-4">
-                <h4 className="text-sm font-medium text-gray-900">API Keys</h4>
-                <p className="text-sm text-gray-500">Manage provider keys</p>
+                <h4 className="text-sm font-medium text-neutral-900 dark:text-neutral-100">API Keys</h4>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">Manage provider keys</p>
               </div>
-            </button>
-
-            <button
-              onClick={handleManageProfile}
-              className="flex items-center p-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
+            </div>
+          </Card>
+          
+          <Card
+            variant="outline"
+            padding="medium"
+            hover={true}
+            onClick={handleManageProfile}
+          >
+            <div className="flex items-center">
               <div className="flex-shrink-0">
-                <svg className="h-8 w-8 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-8 w-8 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
               </div>
               <div className="ml-4">
-                <h4 className="text-sm font-medium text-gray-900">Profile</h4>
-                <p className="text-sm text-gray-500">Update your settings</p>
+                <h4 className="text-sm font-medium text-neutral-900 dark:text-neutral-100">Profile</h4>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">Update your settings</p>
               </div>
-            </button>
-          </div>
-        </div>
-      </div>
-
+            </div>
+          </Card>
+        </Grid>
+      </Panel>
+      
       {/* Recent Bots */}
-      <div className="bg-white shadow rounded-lg">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium text-gray-900">Recent Bots</h3>
-            <button
-              onClick={handleManageBots}
-              className="text-sm text-blue-600 hover:text-blue-500"
-            >
-              View all
-            </button>
+      <Panel
+        title="Recent Bots"
+        variant="default"
+        padding="medium"
+        headerActions={
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleManageBots}
+          >
+            View all
+          </Button>
+        }
+      >
+        {isLoading ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto"></div>
+            <p className="mt-2 text-neutral-600 dark:text-neutral-400">Loading bots...</p>
           </div>
-        </div>
-        <div className="p-6">
-          {isLoading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Loading bots...</p>
+        ) : bots.length === 0 ? (
+          <div className="text-center py-8">
+            <svg className="mx-auto h-12 w-12 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <h3 className="mt-2 text-sm font-medium text-neutral-900 dark:text-neutral-100">No bots yet</h3>
+            <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+              Get started by creating your first AI assistant.
+            </p>
+            <div className="mt-6">
+              <Button
+                onClick={handleCreateBot}
+                className="bg-primary-600 hover:bg-primary-700 text-white"
+              >
+                Create Your First Bot
+              </Button>
             </div>
-          ) : bots.length === 0 ? (
-            <div className="text-center py-8">
-              <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-              </svg>
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No bots yet</h3>
-              <p className="mt-1 text-sm text-gray-500">
-                Get started by creating your first AI assistant.
-              </p>
-              <div className="mt-6">
-                <button
-                  onClick={handleCreateBot}
-                  className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-                >
-                  Create Your First Bot
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {bots.slice(0, 5).map((botWithRole) => (
-                <div
-                  key={botWithRole.bot.id}
-                  className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {bots.slice(0, 5).map((botWithRole) => (
+              <Card
+                key={botWithRole.bot.id}
+                variant="outline"
+                padding="medium"
+                hover={true}
+                onClick={() => navigate('/dashboard?view=bots&action=edit&id=' + botWithRole.bot.id)}
+              >
+                <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
                       <span className="text-2xl">{getProviderIcon(botWithRole.bot.llm_provider)}</span>
                     </div>
                     <div className="ml-4">
-                      <h4 className="text-sm font-medium text-gray-900">{botWithRole.bot.name}</h4>
-                      <p className="text-sm text-gray-500">{botWithRole.bot.description || 'No description'}</p>
+                      <h4 className="text-sm font-medium text-neutral-900 dark:text-neutral-100">{botWithRole.bot.name}</h4>
+                      <p className="text-sm text-neutral-500 dark:text-neutral-400">{botWithRole.bot.description || 'No description'}</p>
                       <div className="flex items-center mt-1 space-x-2">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(botWithRole.role)}`}>
                           {botWithRole.role}
                         </span>
-                        <span className="text-xs text-gray-400">
+                        <span className="text-xs text-neutral-400">
                           {new Date(botWithRole.bot.updated_at).toLocaleDateString()}
                         </span>
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => navigate(`/bots/${botWithRole.bot.id}/chat`)}
-                      className="text-sm text-green-600 hover:text-green-500 font-medium"
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/bots/${botWithRole.bot.id}/chat`);
+                      }}
+                      className="border-success-300 text-success-700 hover:bg-success-50 dark:bg-neutral-900 dark:border-success-800 dark:text-success-300"
                     >
                       Chat
-                    </button>
-                    <button
-                      onClick={() => navigate(`/bots/${botWithRole.bot.id}/documents`)}
-                      className="text-sm text-purple-600 hover:text-purple-500 font-medium"
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/bots/${botWithRole.bot.id}/documents`);
+                      }}
+                      className="border-accent-300 text-accent-700 hover:bg-accent-50 dark:bg-neutral-900 dark:border-accent-800 dark:text-accent-300"
                     >
                       Documents
-                    </button>
+                    </Button>
                     {botWithRole.bot.allow_collaboration && (
-                      <button
-                        onClick={() => navigate(`/bots/${botWithRole.bot.id}/collaboration`)}
-                        className="text-sm text-blue-600 hover:text-blue-500"
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/bots/${botWithRole.bot.id}/collaboration`);
+                        }}
+                        className="border-primary-300 text-primary-700 hover:bg-primary-50 dark:bg-neutral-900 dark:border-primary-800 dark:text-primary-300"
                       >
                         Collaboration
-                      </button>
+                      </Button>
                     )}
-                    <button
-                      onClick={() => navigate('/dashboard?view=bots&action=edit&id=' + botWithRole.bot.id)}
-                      className="text-sm text-gray-600 hover:text-gray-900"
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate('/dashboard?view=bots&action=edit&id=' + botWithRole.bot.id);
+                      }}
+                      className="border-neutral-300 text-neutral-700 hover:bg-neutral-50 dark:bg-neutral-900 dark:border-neutral-700 dark:text-neutral-200"
                     >
                       Edit
-                    </button>
+                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </>
+              </Card>
+            ))}
+          </div>
+        )}
+      </Panel>
+    </Container>
   );
 
   return (
     <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50">
-        <Navigation />
-
-        <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-          <div className="px-4 py-6 sm:px-0">
-            {/* Back button for non-dashboard views */}
-            {currentView !== 'dashboard' && (
-              <div className="mb-6">
-                <button
-                  onClick={handleBackToDashboard}
-                  className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <svg className="mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                  </svg>
-                  Back to Dashboard
-                </button>
-              </div>
-            )}
-
-            {renderContent()}
-          </div>
-        </main>
-      </div>
+      <DashboardLayout
+        title={getPageHeader().title}
+        subtitle={getPageHeader().subtitle}
+        actions={currentView === 'dashboard' ? dashboardActions : undefined}
+      >
+        {renderContent()}
+      </DashboardLayout>
     </ProtectedRoute>
   );
 };

@@ -344,7 +344,7 @@ export class ChatWebSocketService {
       }
     };
 
-    this.socket.onerror = (error) => {
+    this.socket.onerror = () => {
       this.notifyListeners('connection', { status: 'error', error: 'Connection error' });
       
       // Reject the connection promise
@@ -367,7 +367,7 @@ export class ChatWebSocketService {
    * Handle incoming WebSocket messages
    */
   private handleMessage(message: any): void {
-    const { type, data } = message;
+    const { type } = message;
 
     switch (type) {
       case 'connection_established':

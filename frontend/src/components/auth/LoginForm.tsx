@@ -77,16 +77,16 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
 
   return (
     <div className="max-w-md mx-auto">
-      <div className="bg-white py-8 px-6 shadow rounded-lg sm:px-10">
+      <div className="bg-white dark:bg-neutral-900 py-8 px-6 shadow rounded-lg sm:px-10">
         <div className="mb-6">
-          <h2 className="text-center text-3xl font-extrabold text-gray-900">
+          <h2 className="text-center text-3xl font-extrabold text-neutral-900 dark:text-neutral-100">
             Sign in to your account
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
+          <p className="mt-2 text-center text-sm text-neutral-600 dark:text-neutral-400">
             Or{' '}
             <Link
               to="/register"
-              className="font-medium text-blue-600 hover:text-blue-500"
+              className="font-medium text-primary-600 hover:text-primary-500"
             >
               create a new account
             </Link>
@@ -131,7 +131,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
             <div className="text-sm">
               <Link
                 to="/forgot-password"
-                className="font-medium text-blue-600 hover:text-blue-500"
+                className="font-medium text-primary-600 hover:text-primary-500"
               >
                 Forgot your password?
               </Link>

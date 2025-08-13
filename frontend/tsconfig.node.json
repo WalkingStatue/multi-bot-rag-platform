@@ -1,10 +1,49 @@
 {
   "compilerOptions": {
+    // Project References
     "composite": true,
-    "skipLibCheck": true,
+    
+    // Language and Environment
+    "target": "ES2020",
+    "lib": ["ES2020"],
     "module": "ESNext",
+    
+    // Module Resolution
     "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    
+    // Type Checking - Strict Mode
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    
+    // Additional Checks
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true,
+    
+    // Emit
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    
+    // Path Mapping
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
-  "include": ["vite.config.ts"]
+  "include": [
+    "vite.config.ts",
+    "vitest.config.ts",
+    "tailwind.config.js",
+    "postcss.config.js",
+    "*.config.ts",
+    "*.config.js"
+  ]
 }
